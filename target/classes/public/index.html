@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Encuestas - UMSS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .tabla-matriz th, .tabla-matriz td { text-align: center; vertical-align: middle; }
+        .tabla-matriz td:first-child { text-align: left; }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container py-5" style="max-width: 900px;">
+        <header class="pb-3 mb-4 border-bottom">
+            <h1 class="text-primary fw-bold">Sistema de Encuestas UMSS</h1>
+            <p class="text-muted">Plataforma de seguimiento a Titulados y Empleadores</p>
+        </header>
+
+        <!-- Selector de Encuesta -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <label class="form-label fw-bold">Seleccione una Encuesta</label>
+                <select id="selectEncuestas" class="form-select" onchange="cargarPreguntas()">
+                    <option value="">-- Cargando encuestas... --</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Contenedor del Formulario Dinámico -->
+        <div id="contenedorEncuesta" class="card shadow-sm d-none">
+            <div class="card-body p-4">
+                <h3 id="tituloEncuesta" class="card-title text-success fw-bold"></h3>
+                <p id="descripcionEncuesta" class="text-muted mb-4"></p>
+                <hr>
+
+                <form id="formEncuesta">
+                    <!-- Único Campo General Fijo: Correo -->
+                    <div class="card bg-white border mb-4 shadow-sm">
+                        <div class="card-body">
+                            <label class="form-label fw-bold">Correo *</label>
+                            <input type="email" id="contactoUsuario" class="form-control" placeholder="Tu dirección de correo electrónico" required>
+                        </div>
+                    </div>
+
+                    <h5 class="fw-bold mb-3">Preguntas</h5>
+                    <div id="listaPreguntas"></div>
+
+                    <button type="submit" class="btn btn-primary btn-lg mt-4 w-100 fw-bold">Enviar Respuestas</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIBRERÍAS Y COMPONENTES REUTILIZABLES -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/components.js"></script>
+
+    <script>
+        let encuestaActualId = null;
+
+        fetch('/api/encuestas')
+            .then(res => res.json())
+            .then(data => {
+                const select = document.getElementById('selectEncuestas');
+                select.innerHTML = '<option value="">-- Selecciona una opción --</option>';
+                data.forEach(e => {
+                    select.innerHTML += `<option value="${e.id}" data-desc="${e.descripcion}" data-titulo="${e.titulo}">${e.titulo} (${e.destinatario})</option>`;
+                });
+            });
+
+        function cargarPreguntas() {
+            const select = document.getElementById('selectEncuestas');
+            const id = select.value;
+            encuestaActualId = parseInt(id);
+            const contenedor = document.getElementById('contenedorEncuesta');
+
+            if (!id) {
+                contenedor.classList.add('d-none');
+                return;
+            }
+
+            const option = select.options[select.selectedIndex];
+            document.getElementById('tituloEncuesta').innerText = option.getAttribute('data-titulo');
+            document.getElementById('descripcionEncuesta').innerText = option.getAttribute('data-desc');
+
+            fetch(`/api/encuestas/${id}/preguntas`)
+                .then(res => res.json())
+                .then(preguntas => {
+                    const lista = document.getElementById('listaPreguntas');
+                    lista.innerHTML = '';
+
+                    let htmlMatriz = '';
+
+                    preguntas.forEach((p, idx) => {
+                        let divId = `bloque_pregunta_${p.id}`;
+
+                        // RENDERIZADO MATRIZ LIKERT SEPARADO POR SECCIONES
+                        let esMatrizEmpleador = (encuestaActualId === 2 && p.id >= 62);
+                        let esMatrizTitulado = (encuestaActualId === 1 && (p.id === 11 || p.id === 24 || p.id === 38 || p.id === 39));
+
+                        if (esMatrizEmpleador || esMatrizTitulado) {
+                            if (encuestaActualId === 2 && p.id === 72 && htmlMatriz !== '') {
+                                lista.innerHTML += cerrarTablaMatriz(htmlMatriz);
+                                htmlMatriz = '';
+                            }
+
+                            if (htmlMatriz === '') {
+                                let tituloSeccion = "EVALUACIÓN Y SATISFACCIÓN DE CRITERIOS";
+                                if (encuestaActualId === 2 && p.id >= 62 && p.id < 72) tituloSeccion = 'FORMACIÓN Y PERFIL PROFESIONAL';
+                                else if (encuestaActualId === 2 && p.id >= 72) tituloSeccion = 'RELACIÓN DE LA CARRERA CON LA ORGANIZACIÓN';
+                                else if (p.id === 11) tituloSeccion = '¿CUÁL ES SU OPINIÓN PERSONAL RESPECTO AL POSGRADO DE LA FCyT?';
+
+                                htmlMatriz += `<h5 class="fw-bold mt-4 mb-3 text-primary">${tituloSeccion}</h5>
+                                <div class="table-responsive mb-4 shadow-sm rounded border bg-white">
+                                <table class="table table-bordered table-hover tabla-matriz mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Criterio</th>
+                                            <th style="width: 15%;">Totalmente en desacuerdo</th>
+                                            <th style="width: 15%;">En desacuerdo</th>
+                                            <th style="width: 15%;">De acuerdo</th>
+                                            <th style="width: 15%;">Totalmente de Acuerdo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+                            }
+
+                            htmlMatriz += `
+                                <tr id="${divId}">
+                                    <td><strong>${p.textoPregunta}</strong></td>
+                                    <td><input class="form-check-input" type="radio" name="p_${p.id}" value="Totalmente en desacuerdo"></td>
+                                    <td><input class="form-check-input" type="radio" name="p_${p.id}" value="En desacuerdo"></td>
+                                    <td><input class="form-check-input" type="radio" name="p_${p.id}" value="De acuerdo"></td>
+                                    <td><input class="form-check-input" type="radio" name="p_${p.id}" value="Totalmente de Acuerdo"></td>
+                                </tr>`;
+                            return;
+                        }
+
+                        if (htmlMatriz !== '') {
+                            lista.innerHTML += cerrarTablaMatriz(htmlMatriz);
+                            htmlMatriz = '';
+                        }
+
+                        // RENDERIZADO PREGUNTAS ESTÁNDAR
+                        let htmlPregunta = `<div id="${divId}" class="card mb-3 shadow-sm border"><div class="card-body">
+                            <label class="form-label fw-bold">${p.textoPregunta}</label>`;
+
+                        if (p.id === 58 || p.id === 40 || p.id === 41 || p.id === 42 || p.id === 44 || p.textoPregunta.includes("Puede seleccionar más de una opción") || p.textoPregunta.includes("Indique 5 asignaturas")) {
+                            const opciones = JSON.parse(p.opciones);
+                            opciones.forEach(op => {
+                                htmlPregunta += `
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="p_${p.id}" value="${op}">
+                                        <label class="form-check-label">${op}</label>
+                                    </div>`;
+                            });
+                        } else if (p.tipoPregunta === 'OPCION_MULTIPLE' && p.opciones) {
+                            const opciones = JSON.parse(p.opciones);
+                            opciones.forEach(op => {
+                                htmlPregunta += `
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="p_${p.id}" value="${op}" onchange="evaluarCondicionales(${p.id}, '${op.replace(/'/g, "\\'")}')">
+                                        <label class="form-check-label">${op}</label>
+                                    </div>`;
+                            });
+                        } else {
+                            htmlPregunta += `<textarea class="form-control mt-2" name="p_${p.id}" rows="2" placeholder="Escriba su respuesta..."></textarea>`;
+                        }
+
+                        htmlPregunta += `</div></div>`;
+                        lista.innerHTML += htmlPregunta;
+                    });
+
+                    if (htmlMatriz !== '') {
+                        lista.innerHTML += cerrarTablaMatriz(htmlMatriz);
+                    }
+
+                    contenedor.classList.remove('d-none');
+                    aplicarEstadoInicialCondicionales();
+                });
+        }
+
+        function cerrarTablaMatriz(html) {
+            return html + `</tbody></table></div>`;
+        }
+
+        // BLOQUES CONDICIONALES TITULADOS
+        const HijosPosgrado = [4, 5, 6, 7];
+        const HijosInteres = [9, 10];
+        const HijosOrganizacion = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
+        const HijosNoTrabaja = [28, 29];
+        const HijosEmprendimiento = [30, 31, 32, 33, 34];
+        const HijosRedContactos = [47, 48, 49];
+
+        function ocultarGrupo(arr) {
+            arr.forEach(id => {
+                const el = document.getElementById(`bloque_pregunta_${id}`);
+                if (el) el.classList.add('d-none');
+            });
+        }
+
+        function mostrarGrupo(arr) {
+            arr.forEach(id => {
+                const el = document.getElementById(`bloque_pregunta_${id}`);
+                if (el) el.classList.remove('d-none');
+            });
+        }
+
+        function aplicarEstadoInicialCondicionales() {
+            if (encuestaActualId === 1) {
+                ocultarGrupo([...HijosPosgrado, ...HijosInteres, ...HijosOrganizacion, ...HijosNoTrabaja, ...HijosEmprendimiento, ...HijosRedContactos, 17, 21, 23]);
+            }
+        }
+
+        function evaluarCondicionales(preguntaId, valor) {
+            if (encuestaActualId !== 1) return;
+
+            if (preguntaId === 3) {
+                if (valor === 'SI') mostrarGrupo(HijosPosgrado);
+                else ocultarGrupo(HijosPosgrado);
+            }
+
+            if (preguntaId === 8) {
+                if (valor === 'SI') mostrarGrupo(HijosInteres);
+                else ocultarGrupo(HijosInteres);
+            }
+
+            if (preguntaId === 14) {
+                ocultarGrupo([...HijosOrganizacion, ...HijosNoTrabaja, ...HijosEmprendimiento]);
+                if (valor.includes("organización")) mostrarGrupo(HijosOrganizacion);
+                else if (valor.includes("NO trabajo")) mostrarGrupo(HijosNoTrabaja);
+                else if (valor.includes("emprendimiento")) mostrarGrupo(HijosEmprendimiento);
+            }
+
+            if (preguntaId === 16) {
+                if (valor === 'OTRO RUBRO') mostrarGrupo([17]);
+                else ocultarGrupo([17]);
+            }
+            if (preguntaId === 20) {
+                if (valor === 'OTR@ AREA') mostrarGrupo([21]);
+                else ocultarGrupo([21]);
+            }
+            if (preguntaId === 22) {
+                if (valor === 'OTR@ CARGO') mostrarGrupo([23]);
+                else ocultarGrupo([23]);
+            }
+
+            if (preguntaId === 46) {
+                if (valor === 'SI') mostrarGrupo(HijosRedContactos);
+                else ocultarGrupo(HijosRedContactos);
+            }
+        }
+
+        document.getElementById('formEncuesta').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const encuestaId = document.getElementById('selectEncuestas').value;
+            const contacto = document.getElementById('contactoUsuario').value;
+            
+            const formData = new FormData(this);
+            const respuestas = {};
+            let nombre = contacto;
+            
+            formData.forEach((value, key) => {
+                if (key.startsWith('p_')) {
+                    if (respuestas[key]) {
+                        respuestas[key] += `, ${value}`;
+                    } else {
+                        respuestas[key] = value;
+                    }
+                    if (key === 'p_50' || key === 'p_15' || key === 'p_1') {
+                        nombre = value;
+                    }
+                }
+            });
+
+            fetch('/api/respuestas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ encuestaId: parseInt(encuestaId), nombre, contacto, respuestas })
+            })
+            .then(res => {
+                if (res.ok) {
+                    mostrarNotificacion('¡Registro Exitoso!', 'Tus respuestas han sido guardadas correctamente.', true);
+                    document.getElementById('formEncuesta').reset();
+                    document.getElementById('contenedorEncuesta').classList.add('d-none');
+                    document.getElementById('selectEncuestas').value = "";
+                } else {
+                    mostrarNotificacion('Error', 'Ocurrió un error al enviar las respuestas.', false);
+                }
+            })
+            .catch(() => {
+                mostrarNotificacion('Error de Conexión', 'No se pudo conectar con el servidor.', false);
+            });
+        });
+    </script>
+</body>
+</html>
