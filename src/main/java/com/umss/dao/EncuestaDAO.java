@@ -1,6 +1,7 @@
 package com.umss.dao;
 
 import com.umss.config.Database;
+import com.umss.model.ConteoRespuesta;
 import com.umss.model.Encuesta;
 import com.umss.model.Pregunta;
 import com.umss.model.RespuestaDTO;
@@ -48,6 +49,34 @@ public class EncuestaDAO {
                 }
             }
         }
+        return lista;
+    }
+
+    public static List<ConteoRespuesta> obtenerConteoEmprendimiento() throws SQLException {
+        List<ConteoRespuesta> lista = new ArrayList<>();
+        String sql = """
+            SELECT pregunta_id,
+                TRIM(respuesta) AS respuesta,
+                COUNT(*) AS total,
+                ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY pregunta_id), 1) AS porcentaje
+            FROM respuestas
+            WHERE pregunta_id IN (30,31,32,33,34)
+            AND respuesta IS NOT NULL AND TRIM(respuesta) <> ''
+            GROUP BY pregunta_id, TRIM(respuesta)
+            ORDER BY pregunta_id, total DESC
+            """;
+        try (Connection conn = Database.getConnection();
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                ConteoRespuesta c = new ConteoRespuesta();
+                c.setPreguntaId(rs.getInt("pregunta_id"));
+                c.setRespuesta(rs.getString("respuesta"));
+                c.setTotal(rs.getInt("total"));
+                c.setPorcentaje(rs.getDouble("porcentaje"));
+                lista.add(c);
+            }
+     }
         return lista;
     }
 

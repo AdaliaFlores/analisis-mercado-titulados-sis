@@ -2,6 +2,7 @@ package com.umss;
 
 import com.umss.controller.EncuestaController;
 import io.javalin.Javalin;
+import com.umss.controller.ReporteController;
 
 public class App {
     public static void main(String[] args) {
@@ -13,5 +14,6 @@ public class App {
         app.get("/api/encuestas", EncuestaController::listarEncuestas);
         app.get("/api/encuestas/{id}/preguntas", EncuestaController::obtenerPreguntas);
         app.post("/api/respuestas", EncuestaController::guardarRespuesta);
+        app.get("/api/reportes/emprendimiento", ReporteController::reporteEmprendimiento);
     }
 }
