@@ -76,7 +76,6 @@
     <!-- LIBRERÍAS Y COMPONENTES REUTILIZABLES -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/components.js"></script>
-    <script src="/js/reporte-emprendimiento.js"></script>
 
     <script>
         let encuestaActualId = null;
@@ -186,15 +185,6 @@
                                         <label class="form-check-label">${op}</label>
                                     </div>`;
                             });
-
-                        } else if (p.tipoPregunta === 'ESCALA_1_5') {
-                            for (let i = 1; i <= 5; i++) {
-                                htmlPregunta += `
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" name="p_${p.id}" value="${i}">
-                                        <label class="form-check-label">${i}</label>
-                                    </div>`;
-                            }
                         } else {
                             htmlPregunta += `<textarea class="form-control mt-2" name="p_${p.id}" rows="2" placeholder="Escriba su respuesta..."></textarea>`;
                         }
