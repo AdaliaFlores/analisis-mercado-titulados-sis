@@ -78,18 +78,15 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="modal fade" id="modalEmprendimiento" tabindex="-1">
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold text-primary">Ecosistema de Emprendimiento e Innovación</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="contenedorGraficos" class="row g-4"></div>
-                </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-warning">Evaluación de Brechas y Competencias</h5>
+                        <p class="text-muted small">Cruces: tiempo de inserción, cantidad de empleos y razones de desempleo.</p>
+                        <button class="btn btn-outline-warning btn-sm w-100"
+                                data-bs-toggle="modal" data-bs-target="#modalBrechas"
+                                onclick="cargarReporteBrechas()">Ver Reporte</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -103,9 +100,40 @@
         </div>
     </div>
 
+    <!-- Modal Emprendimiento -->
+    <div class="modal fade" id="modalEmprendimiento" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-primary">Ecosistema de Emprendimiento e Innovación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="contenedorGraficos" class="row g-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Brechas y Competencias -->
+    <div class="modal fade" id="modalBrechas" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-warning">Evaluación de Brechas y Competencias</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="contenedorBrechas" class="row g-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/reporte-emprendimiento.js"></script>
+    <script src="/js/reporte-brechas.js"></script>
     <!-- Script específico de dashboard cuando tus compañeros programen sus endpoints -->
     <!-- <script src="/js/dashboard.js"></script> -->
 </body>

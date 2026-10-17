@@ -15,5 +15,6 @@ public class App {
         app.get("/api/encuestas/{id}/preguntas", EncuestaController::obtenerPreguntas);
         app.post("/api/respuestas", EncuestaController::guardarRespuesta);
         app.get("/api/reportes/emprendimiento", ReporteController::reporteEmprendimiento);
+        app.get("/api/reportes/cruce", ReporteController::reporteCruce);
     }
 }
