@@ -2,6 +2,8 @@ package com.umss;
 
 import com.umss.controller.AnalisisController;
 import com.umss.controller.EncuestaController;
+import com.umss.controller.ExportController;
+
 import io.javalin.Javalin;
 import com.umss.controller.ReporteController;
 import com.umss.controller.ReporteHu12Controller;
@@ -24,6 +26,13 @@ public class App {
         app.get("/api/envios/{envioId}", EnvioController::obtenerDetalle);
         app.get("/api/reportes/emprendimiento", ReporteController::reporteEmprendimiento);
         app.get("/api/reportes/cruce", ReporteController::reporteCruce);
+        app.get("/api/reportes/desempleo", ReporteController::reporteDesempleo);
+        app.get("/api/reportes/brechas", ReporteController::reporteBrechas);
+        app.get("/api/reportes/empleabilidad", ReporteController::reporteEmpleabilidad);
+        app.get("/api/reportes/formacion-financiamiento", ReporteController::reporteFormacionFinanciamiento);
+        app.get("/api/export/csv", ExportController::exportCsv);
+        app.get("/api/export/excel", ExportController::exportExcel);
+        app.get("/api/export/pdf", ExportController::exportPdf);
         // Data Wrangling: corrección de respuestas de texto (con auditoría)
         app.put("/api/respuestas/{id}", RespuestaController::editar);
         app.get("/api/envios/{envioId}/auditoria", RespuestaController::auditoriaPorEnvio);
