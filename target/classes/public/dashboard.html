@@ -92,6 +92,17 @@
                     </div>
                 </div>
             </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-danger">Pertinencia, Geografía y Fuga de Talentos</h5>
+                        <p class="text-muted small">Salario por departamento, pertinencia del cargo y migración de titulados.</p>
+                        <button class="btn btn-outline-danger btn-sm w-100"
+                                data-bs-toggle="modal" data-bs-target="#modalUbicacion"
+                                onclick="cargarReporteUbicacion()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ÁREA DONDE TUS COMPAÑEROS CONSTRUIRÁN SUS GRÁFICOS / TABLAS -->
@@ -132,11 +143,28 @@
             </div>
         </div>
     </div>
+  
+    <!-- Modal Pertinencia, Geografía y Fuga de Talentos -->
+    <div class="modal fade" id="modalUbicacion" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-danger">Pertinencia Curricular, Geografía y Fuga de Talentos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="filtrosUbicacion" class="row g-3 mb-3"></div>
+                    <div id="contenedorUbicacion"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/reporte-emprendimiento.js"></script>
     <script src="/js/reporte-brechas.js"></script>
+    <script src="/js/reporte-ubicacion.js"></script>
     <!-- Script específico de dashboard cuando tus compañeros programen sus endpoints -->
     <!-- <script src="/js/dashboard.js"></script> -->
 </body>
