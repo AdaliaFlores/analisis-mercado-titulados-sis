@@ -4,9 +4,11 @@ import com.umss.controller.AnalisisController;
 import com.umss.controller.EncuestaController;
 import io.javalin.Javalin;
 import com.umss.controller.ReporteController;
+import com.umss.controller.ReporteHu12Controller;
 import com.umss.controller.RespuestaController;
 import com.umss.controller.EnvioController;
 import com.umss.controller.AnalisisController;
+import com.umss.controller.ReporteHu12Controller;
 
 public class App {
     public static void main(String[] args) {
@@ -29,5 +31,8 @@ public class App {
         app.get("/api/analisis/frecuencias", AnalisisController::frecuencias);
         app.get("/api/analisis/promedio", AnalisisController::promedio);
         app.get("/api/analisis/chi-cuadrado", AnalisisController::chiCuadrado);
+        // Análisis (HU12): específico para encuestas de titulados y empleadores
+        app.get("/api/reportes/hu12/frecuencias", ReporteHu12Controller::frecuencias);
+        app.get("/api/reportes/hu12/alumno", ReporteHu12Controller::alumno);
     }
 }
