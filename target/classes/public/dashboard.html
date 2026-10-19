@@ -8,6 +8,7 @@
     <!-- Chart.js para visualización de gráficos (Opcional para reportes) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body class="bg-light">
 
     <!-- MENÚ DE NAVEGACIÓN -->
@@ -61,15 +62,6 @@
             <div class="col-md-4">
                 <div class="card shadow-sm border-0 h-100">
                     <div class="card-body">
-                        <h5 class="fw-bold text-dark">Exportación de Datos</h5>
-                        <p class="text-muted small">Descarga de resultados en formato Excel / PDF.</p>
-                        <button class="btn btn-outline-dark btn-sm w-100">Exportar</button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-body">
                         <h5 class="fw-bold text-primary">Ecosistema de Emprendimiento e Innovación</h5>
                         <p class="text-muted small">Gráficos de pastel y barras: Spin-offs, Startups y satisfacción.</p>
                         <button class="btn btn-outline-primary btn-sm w-100"
@@ -82,10 +74,53 @@
                 <div class="card shadow-sm border-0 h-100">
                     <div class="card-body">
                         <h5 class="fw-bold text-warning">Evaluación de Brechas y Competencias</h5>
-                        <p class="text-muted small">Cruces: tiempo de inserción, cantidad de empleos y razones de desempleo.</p>
+                        <p class="text-muted small">Radar de brechas (mercado vs. titulado), media/desviación, mapas de calor y demanda del empleador.</p>
                         <button class="btn btn-outline-warning btn-sm w-100"
                                 data-bs-toggle="modal" data-bs-target="#modalBrechas"
                                 onclick="cargarReporteBrechas()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-danger">Desempleo y Barreras de Inserción Laboral</h5>
+                        <p class="text-muted small">Población desempleada, razones, matrices y demandas del empleador.</p>
+                        <button class="btn btn-outline-danger btn-sm w-100"
+                                data-bs-toggle="modal" data-bs-target="#modalDesempleo"
+                                onclick="cargarReporteDesempleo()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-primary">Empleabilidad y Ofertas con poca demanda</h5>
+                        <p class="text-muted small">Áreas con mayor empleabilidad (barras verticales) y oferta con poca demanda (eje cartesiano).</p>
+                        <button class="btn btn-outline-primary btn-sm w-100"
+                                data-bs-toggle="modal" data-bs-target="#modalEmpleabilidad"
+                                onclick="cargarReporteEmpleabilidad()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-info">Formación continua y mecanismos de financiamiento</h5>
+                        <p class="text-muted small">Áreas de interés de posgrado, alerta de concentración crítica (≥70%) y matriz + diagnóstico χ².</p>
+                        <button class="btn btn-outline-info btn-sm w-100"
+                                data-bs-toggle="modal" data-bs-target="#modalFormacion"
+                                onclick="cargarReporteFormacion()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-dark">Exportación de Datos</h5>
+                        <p class="text-muted small">Descarga de resultados en formato Excel / PDF.</p>
+                        <button class="btn btn-outline-dark btn-sm w-100"
+                        data-bs-toggle="modal" data-bs-target="#modalExport">Exportar</button>
                     </div>
                 </div>
             </div>
@@ -130,10 +165,96 @@
         </div>
     </div>
 
+    <!-- Modal Desempleo y Barreras -->
+    <div class="modal fade" id="modalDesempleo" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-danger">Desempleo y Barreras de Inserción Laboral</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="contenedorDesempleo" class="row g-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Formación continua y financiamiento -->
+    <div class="modal fade" id="modalFormacion" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-info">Formación continua y mecanismos de financiamiento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="contenedorFormacion" class="row g-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Empleabilidad y Ofertas con poca demanda -->
+    <div class="modal fade" id="modalEmpleabilidad" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-primary">Empleabilidad y Ofertas con poca demanda</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="contenedorEmpleabilidad" class="row g-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Modal Exportación de Datos -->
+    <div class="modal fade" id="modalExport" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-dark">Exportación de Datos (CSV / Excel / PDF)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Seleccionar reporte a exportar</label>
+                            <select id="selExportTipo" class="form-select">
+                            <option value="brechas">Evaluación de Brechas y Competencias (Radar + Asignaturas)</option>
+                            <option value="emprendimiento">Ecosistema de Emprendimiento e Innovación (Spin-offs vs Startups)</option>
+                            <option value="desempleo">Desempleo y Barreras (Matrices)</option>
+                            <option value="formacion">Formación continua y Financiamiento (Áreas, Niveles, Matriz, χ²)</option>
+                            <option value="empleabilidad">Empleabilidad y Ofertas con poca demanda (Empleabilidad + Razones, Asignaturas)</option>
+                            <option value="cruce">Cruce de Variables (Matriz de Frecuencia Cruzada)</option>
+                        </select>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary" onclick="exportar('csv')">Descargar CSV</button>
+                        <button class="btn btn-outline-success" onclick="exportar('excel')">Descargar Excel (.XLSX)</button>
+                        <button class="btn btn-outline-danger" onclick="exportar('pdf')">Descargar PDF</button>
+                    </div>
+                    <div class="small text-muted mt-3">Las exportaciones incluyen matrices de frecuencia cruzada, frecuencias absolutas/relativas y datos tabulares listos para sustentar el Plan de Desarrollo Estratégico.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+      function exportar(formato) {
+        const tipo = document.getElementById('selExportTipo').value;
+        const url = '/api/export/' + formato + '?tipo=' + encodeURIComponent(tipo);
+        window.location.href = url;
+      }
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/reporte-emprendimiento.js"></script>
     <script src="/js/reporte-brechas.js"></script>
+    <script src="/js/reporte-desempleo.js"></script>
+    <script src="/js/reporte-empleabilidad.js"></script>
+    <script src="/js/reporte-formacion.js"></script>
     <!-- Script específico de dashboard cuando tus compañeros programen sus endpoints -->
     <!-- <script src="/js/dashboard.js"></script> -->
 </body>

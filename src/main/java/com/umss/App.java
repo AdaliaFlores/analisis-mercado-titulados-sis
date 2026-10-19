@@ -1,6 +1,8 @@
 package com.umss;
 
 import com.umss.controller.EncuestaController;
+import com.umss.controller.ExportController;
+
 import io.javalin.Javalin;
 import com.umss.controller.ReporteController;
 
@@ -16,5 +18,12 @@ public class App {
         app.post("/api/respuestas", EncuestaController::guardarRespuesta);
         app.get("/api/reportes/emprendimiento", ReporteController::reporteEmprendimiento);
         app.get("/api/reportes/cruce", ReporteController::reporteCruce);
+        app.get("/api/reportes/desempleo", ReporteController::reporteDesempleo);
+        app.get("/api/reportes/brechas", ReporteController::reporteBrechas);
+        app.get("/api/reportes/empleabilidad", ReporteController::reporteEmpleabilidad);
+        app.get("/api/reportes/formacion-financiamiento", ReporteController::reporteFormacionFinanciamiento);
+        app.get("/api/export/csv", ExportController::exportCsv);
+        app.get("/api/export/excel", ExportController::exportExcel);
+        app.get("/api/export/pdf", ExportController::exportPdf);
     }
 }
