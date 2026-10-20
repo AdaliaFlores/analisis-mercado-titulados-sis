@@ -47,24 +47,6 @@
             <div class="col-md-4">
                 <div class="card shadow-sm border-0 h-100">
                     <div class="card-body">
-                        <h5 class="fw-bold text-primary">Métricas Titulados</h5>
-                        <p class="text-muted small">Estado laboral, salarios e inserción en el mercado.</p>
-                        <button class="btn btn-outline-primary btn-sm w-100">Ver Reporte</button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-body">
-                        <h5 class="fw-bold text-success">Satisfacción Empleadores</h5>
-                        <p class="text-muted small">Evaluación del perfil profesional y competencias.</p>
-                        <button class="btn btn-outline-success btn-sm w-100">Ver Reporte</button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-body">
                         <h5 class="fw-bold text-primary">Ecosistema de Emprendimiento e Innovación</h5>
                         <p class="text-muted small">Gráficos de pastel y barras: Spin-offs, Startups y satisfacción.</p>
                         <button class="btn btn-outline-primary btn-sm w-100"
@@ -87,11 +69,39 @@
             <div class="col-md-4">
                 <div class="card shadow-sm border-0 h-100">
                     <div class="card-body">
+                        <h5 class="fw-bold text-danger">Pertinencia, Geografía y Fuga de Talentos</h5>
+                        <p class="text-muted small">Salario por departamento, pertinencia del cargo y migración de titulados.</p>
+                        <button class="btn btn-outline-danger btn-sm w-100"
+                                data-bs-toggle="modal" data-bs-target="#modalUbicacion"
+                                onclick="cargarReporteUbicacion()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
                         <h5 class="fw-bold text-danger">Desempleo y Barreras de Inserción Laboral</h5>
                         <p class="text-muted small">Población desempleada, razones, matrices y demandas del empleador.</p>
                         <button class="btn btn-outline-danger btn-sm w-100"
                                 data-bs-toggle="modal" data-bs-target="#modalDesempleo"
                                 onclick="cargarReporteDesempleo()">Ver Reporte</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <h5 class="fw-bold text-info">
+                            Demanda Empresarial y Red alumno
+                        </h5>
+                        <p class="text-muted small">
+                            Necesidades de contratación, percepción de empleadores
+                            y vinculación con titulados.
+                        </p>
+                        <button class="btn btn-outline-info btn-sm w-100"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalHu12"
+                                onclick="cargarReporteHu12()"> Ver Reporte </button>
                     </div>
                 </div>
             </div>
@@ -126,6 +136,43 @@
                         data-bs-toggle="modal" data-bs-target="#modalExport">Exportar</button>
                     </div>
                 </div>
+            </div>
+            <!-- Sección para importar datos dentro de dashboard.html -->
+            <div class="card p-4 shadow-sm mb-4">
+                <h5 class="card-title">Importar Encuestas desde Excel</h5>
+                <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de los titulados.</p>
+                
+                <form id="formImportarExcel" class="row g-3 align-items-center">
+                    <div class="col-auto">
+                        <input type="file" id="inputExcel" class="form-control" accept=".xlsx, .xls" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" id="btnSubirExcel" class="btn btn-primary">
+                            Subir e Importar
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Mensaje de respuesta visual para el usuario -->
+                <div id="mensajeImportacion" class="mt-3" style="display: none;"></div>
+            </div>
+             <!-- Sección para importar datos de empleadores en dashboard.html -->
+            <div class="card p-4 shadow-sm mb-4">
+                <h5 class="card-title">Importar Encuestas de Empleadores</h5>
+                <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de la encuesta a empleadores.</p>
+                
+                <form id="formImportarEmpleadores" class="row g-3 align-items-center">
+                    <div class="col-auto">
+                        <input type="file" id="inputExcelEmpleadores" class="form-control" accept=".xlsx, .xls" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" id="btnSubirEmpleadores" class="btn btn-success">
+                            Subir e Importar Empleadores
+                        </button>
+                    </div>
+                </form>
+                
+                <div id="mensajeImportacionEmpleadores" class="mt-3" style="display: none;"></div>
             </div>
         </div>
 
@@ -166,6 +213,109 @@
                 </div>
             </div>
         </div>
+    </div>
+  
+    <!-- Modal Pertinencia, Geografía y Fuga de Talentos -->
+    <div class="modal fade" id="modalUbicacion" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-danger">Pertinencia Curricular, Geografía y Fuga de Talentos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="filtrosUbicacion" class="row g-3 mb-3"></div>
+                    <div id="contenedorUbicacion"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal HU12: Demanda Empresarial y Red alumno -->
+    <div class="modal fade" id="modalHu12" tabindex="-1"
+        aria-labelledby="tituloModalHu12" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title fw-bold text-info"
+                            id="tituloModalHu12">
+                            Demanda Empresarial y Red Alumnos
+                        </h5>
+                        <small class="text-muted">
+                            Análisis de empleadores y vinculación con titulados
+                        </small>
+                    </div>
+                    <button type="button" class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <ul class="nav nav-tabs mb-4" id="tabsHu12" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#hu12Demanda"
+                                    type="button" role="tab">
+                                Demanda empresarial
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#hu12Percepcion"
+                                    type="button" role="tab">
+                                Percepción del empleador
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#hu12alumno"
+                                    type="button" role="tab">
+                                Red alumno
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active"
+                            id="hu12Demanda" role="tabpanel">
+                            <p class="text-muted small">
+                                Contratación, demanda futura, formación requerida,
+                                convocatoria y cargos profesionales.
+                            </p>
+                            <div id="hu12ContenidoDemanda" class="row g-4"></div>
+                        </div>
+
+                        <div class="tab-pane fade"
+                            id="hu12Percepcion" role="tabpanel">
+                            <p class="text-muted small">
+                                Distribución de respuestas de las preguntas 62–79.
+                            </p>
+                            <div id="hu12ContenidoPercepcion" class="row g-4"></div>
+                        </div>
+
+                        <div class="tab-pane fade"
+                            id="hu12alumno" role="tabpanel">
+                            <div id="hu12Contenidoalumno">
+                                <p class="text-muted">
+                                    La información se cargará al abrir el reporte.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary"
+                            type="button" data-bs-dismiss="modal">
+                        Cerrar
+                    </button>
+                </div>
+            </div> 
+         </div>
     </div>
 
     <!-- Modal Desempleo y Barreras -->
@@ -243,6 +393,7 @@
             </div>
         </div>
     </div>
+    
     <script>
       function exportar(formato) {
         const tipo = document.getElementById('selExportTipo').value;
@@ -255,9 +406,12 @@
     <script src="/js/components.js"></script>
     <script src="/js/reporte-emprendimiento.js"></script>
     <script src="/js/reporte-brechas.js"></script>
+    <script src="/js/reporte-ubicacion.js"></script>
+    <script src="/js/reporte-hu12.js"></script>
     <script src="/js/reporte-desempleo.js"></script>
     <script src="/js/reporte-empleabilidad.js"></script>
     <script src="/js/reporte-formacion.js"></script>
+    <script src="/js/ImportExcel.js"></script>
     <!-- Script específico de dashboard cuando tus compañeros programen sus endpoints -->
     <!-- <script src="/js/dashboard.js"></script> -->
 </body>

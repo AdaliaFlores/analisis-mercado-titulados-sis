@@ -202,7 +202,7 @@
       return;
     }
 
-    // filas (asignaturas) y columnas (variable)
+    // filas (asignaturas) y columnas (variable), ordenadas por conteo total
     const totalFila = {}, totalCol = {};
     celdas.forEach(c => {
       totalFila[c.valorX] = (totalFila[c.valorX] || 0) + c.total;
@@ -210,6 +210,7 @@
     });
     const filas = Object.keys(totalFila).sort((a, b) => totalFila[b] - totalFila[a]);
     const cols = Object.keys(totalCol).sort((a, b) => totalCol[b] - totalCol[a]);
+    const totalTabla = celdas.reduce((s, c) => s + c.total, 0);
 
     const valor = (x, y) => {
       const c = celdas.find(c => c.valorX === x && c.valorY === y);
@@ -217,16 +218,19 @@
     };
     const max = Math.max(1, ...celdas.map(c => c.total));
 
-    const encabezado = cols.map(col => `<th class="small align-bottom">${escapar(col)}</th>`).join('');
+    const encabezado = cols.map(col =>
+      `<th class="small align-bottom" title="${escapar(col)}">${escapar(corto(col, 34))}</th>`).join('');
     const cuerpo = filas.map(fila => {
+      const pctFila = totalTabla ? Math.round(100 * totalFila[fila] / totalTabla) : 0;
       const celdasHtml = cols.map(col => {
         const v = valor(fila, col);
         const alfa = v === 0 ? 0 : 0.12 + 0.78 * (v / max);
         const texto = alfa > 0.55 ? '#fff' : '#212529';
-        return `<td style="background:rgba(220,53,69,${alfa});color:${texto};font-weight:${v ? 600 : 400}">${v || ''}</td>`;
+        const cel = v ? `${v} titulados — ${escapar(fila)} / ${escapar(col)}` : '';
+        return `<td class="small" title="${cel}" style="background:rgba(220,53,69,${alfa});color:${texto};font-weight:${v ? 600 : 400}">${v || ''}</td>`;
       }).join('');
-      return `<tr><th class="text-start small">${escapar(fila)}</th>${celdasHtml}
-        <td class="table-secondary fw-bold">${totalFila[fila]}</td></tr>`;
+      return `<tr><th class="text-start small" title="${escapar(fila)}">${escapar(corto(fila, 40))}</th>${celdasHtml}
+        <td class="table-secondary fw-bold">${totalFila[fila]}<div class="fw-normal text-muted" style="font-size:.7em">${pctFila}%</div></td></tr>`;
     }).join('');
 
     cont.insertAdjacentHTML('beforeend', `
@@ -358,6 +362,12 @@
           </div>
         </div>
       </div>`);
+  }
+
+  /** Recorta etiquetas largas; el texto completo queda en el tooltip (title). */
+  function corto(s, n) {
+    s = String(s == null ? '' : s);
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
   }
 
   function escapar(s) {

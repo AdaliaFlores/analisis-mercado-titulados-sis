@@ -44,10 +44,6 @@ public class ExportController {
     private static final DecimalFormat DF2 = new DecimalFormat("0.00", java.text.DecimalFormatSymbols.getInstance(java.util.Locale.US));
     private static final DecimalFormat DF3 = new DecimalFormat("0.000", java.text.DecimalFormatSymbols.getInstance(java.util.Locale.US));
 
-    /**
-     * Compatibilidad con Excel: en locales en español (decimal ","), Excel usa ";" como
-     * separador de columnas. Detectamos el separador decimal del sistema para generar el CSV correcto.
-     */
     private static final char DEC_SEP = new java.text.DecimalFormatSymbols(java.util.Locale.getDefault()).getDecimalSeparator();
     private static final char LIST_SEP = (DEC_SEP == ',') ? ';' : ',';
 
@@ -219,18 +215,36 @@ public class ExportController {
 
                     // Asignaturas ventaja 
                     sb.append("=== ASIGNATURAS CON MAYOR VENTAJA PARA EL DESEMPEÑO (p42) ===\r\n");
-                    sb.append("ASIGNATURA,TOTAL,%\r\n");
+                    sb.append("ASIGNATURA,TOTAL,%_TITULADOS\r\n");
                     List<ConteoRespuesta> asig42 = EncuestaDAO.asignaturasFrecuencia(42);
-                    int totalAsig42 = 0;
-                    for (ConteoRespuesta c : asig42) totalAsig42 += c.getTotal();
                     for (ConteoRespuesta c : asig42) {
-                        double pct = totalAsig42 == 0 ? 0.0 : (c.getTotal() * 100.0 / totalAsig42);
-                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
+                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(c.getPorcentaje())).append("\r\n");
                     }
                     sb.append("\r\n");
                     sb.append("=== CRUCE: ASIGNATURAS DE VENTAJA (p42) × SITUACIÓN LABORAL ACTUAL (p14) ===\r\n");
                     sb.append("ASIGNATURA,SITUACION_LABORAL,TOTAL\r\n");
                     for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(42, 14)) {
+                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
+                    }
+                    sb.append("\r\n");
+
+                    // Asignaturas de poca utilidad
+                    List<ConteoRespuesta> asig44 = EncuestaDAO.asignaturasFrecuencia(44);
+                    sb.append("=== ASIGNATURAS DE POCA UTILIDAD PROFESIONAL (p44) ===\r\n");
+                    sb.append("ASIGNATURA,TOTAL,%_TITULADOS\r\n");
+                    for (ConteoRespuesta c : asig44) {
+                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(c.getPorcentaje())).append("\r\n");
+                    }
+                    sb.append("\r\n");
+                    sb.append("=== CRUCE: ASIGNATURAS DE POCA UTILIDAD (p44) × SITUACIÓN LABORAL ACTUAL (p14) ===\r\n");
+                    sb.append("ASIGNATURA,SITUACION_LABORAL,TOTAL\r\n");
+                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(44, 14)) {
+                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
+                    }
+                    sb.append("\r\n");
+                    sb.append("=== CRUCE: ASIGNATURAS DE POCA UTILIDAD (p44) × RAZÓN DE INACTIVIDAD LABORAL (p28) ===\r\n");
+                    sb.append("ASIGNATURA,RAZON_INACTIVIDAD,TOTAL\r\n");
+                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(44, 28)) {
                         sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
                     }
                 }
@@ -638,16 +652,14 @@ public class ExportController {
                     Row rhA = sh.createRow(rowIdx++);
                     rhA.createCell(0).setCellValue("ASIGNATURA (p42)");
                     rhA.createCell(1).setCellValue("TOTAL");
-                    rhA.createCell(2).setCellValue("%");
+                    rhA.createCell(2).setCellValue("% TITULADOS");
                     styleRow(rhA, headerStyle);
                     List<ConteoRespuesta> asig42 = EncuestaDAO.asignaturasFrecuencia(42);
-                    int t42 = 0;
-                    for (ConteoRespuesta c : asig42) t42 += c.getTotal();
                     for (ConteoRespuesta c : asig42) {
                         Row rr = sh.createRow(rowIdx++);
                         rr.createCell(0).setCellValue(c.getRespuesta());
                         rr.createCell(1).setCellValue(c.getTotal());
-                        rr.createCell(2).setCellValue(t42 == 0 ? 0.0 : (c.getTotal() * 100.0 / t42));
+                        rr.createCell(2).setCellValue(c.getPorcentaje());
                     }
                     rowIdx++;
                     // Cruce
@@ -662,6 +674,26 @@ public class ExportController {
                         rr.createCell(1).setCellValue(cc.getValorY());
                         rr.createCell(2).setCellValue(cc.getTotal());
                     }
+                    rowIdx++;
+
+                    // Asignaturas de poca utilidad (p44)
+                    Row rhB = sh.createRow(rowIdx++);
+                    rhB.createCell(0).setCellValue("ASIGNATURA (p44) - POCA UTILIDAD");
+                    rhB.createCell(1).setCellValue("TOTAL");
+                    rhB.createCell(2).setCellValue("% TITULADOS");
+                    styleRow(rhB, headerStyle);
+                    List<ConteoRespuesta> asig44 = EncuestaDAO.asignaturasFrecuencia(44);
+                    for (ConteoRespuesta c : asig44) {
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(c.getRespuesta());
+                        rr.createCell(1).setCellValue(c.getTotal());
+                        rr.createCell(2).setCellValue(c.getPorcentaje());
+                    }
+                    rowIdx++;
+                    rowIdx = escribirCruceExcel(sh, rowIdx, headerStyle,
+                            "ASIGNATURA (p44) × SITUACIÓN LABORAL (p14)", EncuestaDAO.cruceAsignaturaVariable(44, 14));
+                    rowIdx = escribirCruceExcel(sh, rowIdx, headerStyle,
+                            "ASIGNATURA (p44) × RAZÓN DE INACTIVIDAD (p28)", EncuestaDAO.cruceAsignaturaVariable(44, 28));
                 }
                 case "emprendimiento" -> {
                     @SuppressWarnings("unchecked")
@@ -891,6 +923,14 @@ public class ExportController {
                         asig.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
                         asig.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"),
                         COL, row, COL + ANCHO_COLS, row + 23);
+                row += 24;
+
+                List<ConteoRespuesta> asig44 = list(EncuestaDAO.asignaturasFrecuencia(44));
+                if (asig44.size() > 10) asig44 = asig44.subList(0, 10);
+                insertarImagen(wb, sh, chartBar("Asignaturas de poca utilidad (p44)", "Asignatura", "Frecuencia",
+                        asig44.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                        asig44.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"),
+                        COL, row, COL + ANCHO_COLS, row + 23);
             }
             case "emprendimiento" -> {
                 List<ConteoRespuesta> filas = list(EncuestaDAO.obtenerConteoEmprendimiento());
@@ -990,6 +1030,28 @@ public class ExportController {
 
     private static int countBlock(List<ConteoRespuesta> l) { return l == null ? 0 : l.size(); }
     private static int getSimpleCount(List<ConteoRespuesta> l) { return l == null ? 0 : l.size(); }
+
+    /** Escribe una tabla de frecuencia cruzada (asignatura × variable) en la hoja Excel. Devuelve la próxima fila libre. */
+    private static int escribirCruceExcel(Sheet sh, int rowIdx, CellStyle headerStyle, String titulo, List<CeldaCruce> celdas) {
+        int ri = rowIdx;
+        Row rhT = sh.createRow(ri++);
+        rhT.createCell(0).setCellValue(titulo);
+        styleRow(rhT, headerStyle);
+
+        Row rh = sh.createRow(ri++);
+        rh.createCell(0).setCellValue("ASIGNATURA");
+        rh.createCell(1).setCellValue("VARIABLE");
+        rh.createCell(2).setCellValue("TOTAL");
+        styleRow(rh, headerStyle);
+
+        for (CeldaCruce cc : celdas) {
+            Row rr = sh.createRow(ri++);
+            rr.createCell(0).setCellValue(cc.getValorX());
+            rr.createCell(1).setCellValue(cc.getValorY());
+            rr.createCell(2).setCellValue(cc.getTotal());
+        }
+        return ri + 1;
+    }
 
     private static int addEmpSheetBlock(Sheet sh, int rowIdxStart, int pid, String titulo, Map<Integer, List<ConteoRespuesta>> porPreg, CellStyle headerStyle) {
         int ri = rowIdxStart;
@@ -1106,16 +1168,36 @@ public class ExportController {
                     sb.append("</table>");
                     sb.append("<h3>Asignaturas con mayor ventaja para el desempeño (p42)</h3>");
                     List<ConteoRespuesta> as42 = EncuestaDAO.asignaturasFrecuencia(42);
-                    int t42h = 0; for (ConteoRespuesta c : as42) t42h += c.getTotal();
-                    sb.append("<table><tr><th>ASIGNATURA</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
+                    sb.append("<table><tr><th>ASIGNATURA</th><th class='num'>TOTAL</th><th class='num'>% TITULADOS</th></tr>");
                     for (ConteoRespuesta c : as42) {
-                        double p = t42h == 0 ? 0 : (c.getTotal()*100.0/t42h);
-                        sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>").append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(p)).append("</td></tr>");
+                        sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>").append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(c.getPorcentaje())).append("</td></tr>");
                     }
                     sb.append("</table>");
                     sb.append("<h3>Cruce: Asignaturas de ventaja (p42) × Situación laboral actual (p14)</h3>");
                     sb.append("<table><tr><th>ASIGNATURA (p42)</th><th>SITUACIÓN LABORAL (p14)</th><th class='num'>TOTAL</th></tr>");
                     for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(42,14)) {
+                        sb.append("<tr><td>").append(esc(cc.getValorX())).append("</td><td>").append(esc(cc.getValorY())).append("</td><td class='num'>").append(cc.getTotal()).append("</td></tr>");
+                    }
+                    sb.append("</table>");
+
+                    List<ConteoRespuesta> as44 = EncuestaDAO.asignaturasFrecuencia(44);
+                    sb.append("<h3>Asignaturas de poca utilidad profesional (p44)</h3>");
+                    sb.append("<table><tr><th>ASIGNATURA</th><th class='num'>TOTAL</th><th class='num'>% TITULADOS</th></tr>");
+                    for (ConteoRespuesta c : as44) {
+                        sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>").append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(c.getPorcentaje())).append("</td></tr>");
+                    }
+                    sb.append("</table>");
+
+                    sb.append("<h3>Cruce: Asignaturas de poca utilidad (p44) × Situación laboral (p14)</h3>");
+                    sb.append("<table><tr><th>ASIGNATURA (p44)</th><th>SITUACIÓN LABORAL (p14)</th><th class='num'>TOTAL</th></tr>");
+                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(44,14)) {
+                        sb.append("<tr><td>").append(esc(cc.getValorX())).append("</td><td>").append(esc(cc.getValorY())).append("</td><td class='num'>").append(cc.getTotal()).append("</td></tr>");
+                    }
+                    sb.append("</table>");
+
+                    sb.append("<h3>Cruce: Asignaturas de poca utilidad (p44) × Razón de inactividad laboral (p28)</h3>");
+                    sb.append("<table><tr><th>ASIGNATURA (p44)</th><th>RAZÓN (p28)</th><th class='num'>TOTAL</th></tr>");
+                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(44,28)) {
                         sb.append("<tr><td>").append(esc(cc.getValorX())).append("</td><td>").append(esc(cc.getValorY())).append("</td><td class='num'>").append(cc.getTotal()).append("</td></tr>");
                     }
                     sb.append("</table>");
@@ -1129,6 +1211,11 @@ public class ExportController {
                     sb.append(htmlChart("Asignaturas de mayor ventaja (p42)", chartBar("Asignaturas de mayor ventaja", "Asignatura", "Frecuencia",
                             as42top.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
                             as42top.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")));
+                    List<ConteoRespuesta> as44top = as44;
+                    if (as44top.size() > 10) as44top = as44top.subList(0, 10);
+                    sb.append(htmlChart("Asignaturas de poca utilidad (p44)", chartBar("Asignaturas de poca utilidad", "Asignatura", "Frecuencia",
+                            as44top.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                            as44top.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")));
                 }
                 case "emprendimiento" -> {
                     sb.append("<h2>2. Ecosistema de Emprendimiento e Innovación</h2>");
