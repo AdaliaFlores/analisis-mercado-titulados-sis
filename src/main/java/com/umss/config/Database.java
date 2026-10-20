@@ -8,14 +8,15 @@ public class Database {
 
     public static Connection getConnection() throws SQLException {
         String dbUrl = System.getenv("DB_URL");
+        String dbUser = System.getenv("DB_USER");
+        String dbPassword = System.getenv("DB_PASSWORD");
 
-        if (dbUrl == null || dbUrl.isBlank()) {
+        if (dbUrl == null || dbUser == null || dbPassword == null) {
             throw new SQLException(
-                "Falta configurar la variable de entorno DB_URL"
+                "Faltan configurar DB_URL, DB_USER o DB_PASSWORD"
             );
         }
 
-        return DriverManager.getConnection(dbUrl);
+        return DriverManager.getConnection(dbUrl, dbUser, dbPassword);
     }
 }
-
