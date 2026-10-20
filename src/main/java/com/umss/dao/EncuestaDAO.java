@@ -329,6 +329,12 @@ public class EncuestaDAO {
         return Math.round(v * 10.0) / 10.0;
     }
 
+    /**
+     * Separa las opciones de una respuesta multi-seleccion.
+     * Los delimitadores reales de los datos son ';' y ',';
+     * las comas DENTRO de parentesis ("Basicas (Fisica, Calculo, Algebras)")
+     * no deben partir el elemento.
+     */
     private static List<String> separarOpciones(String texto) {
         List<String> items = new ArrayList<>();
         if (texto == null) return items;
@@ -337,7 +343,7 @@ public class EncuestaDAO {
         for (char ch : texto.toCharArray()) {
             if (ch == '(') nivel++;
             if (ch == ')') nivel = Math.max(0, nivel - 1);
-            if (ch == ',' && nivel == 0) {
+            if ((ch == ';' || ch == ',' || ch == '|') && nivel == 0) {
                 String t = actual.toString().trim();
                 if (!t.isEmpty()) items.add(t);
                 actual.setLength(0);

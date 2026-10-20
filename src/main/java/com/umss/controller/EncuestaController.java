@@ -41,9 +41,20 @@ public class EncuestaController {
     }
 
     public static void importarExcel(Context ctx) {
+        ejecutarImportacion(ctx, 1);
+    }
+
+    public static void importarExcelEmpleadores(Context ctx) {
+        ejecutarImportacion(ctx, 2);
+    }
+
+    /**
+     * Sube el Excel y lo inserta directamente en la base de datos.
+     * encuesta_id por defecto: 1 = titulados, 2 = empleadores.
+     */
+    private static void ejecutarImportacion(Context ctx, int encuestaPorDefecto) {
         UploadedFile file = ctx.uploadedFile("archivoExcel");
-        // Puedes recibir el id de la encuesta como parámetro en la URL o query string, o asignarlo por defecto:
-        int encuestaId = ctx.queryParamAsClass("encuesta_id", Integer.class).getOrDefault(1);
+        int encuestaId = ctx.queryParamAsClass("encuesta_id", Integer.class).getOrDefault(encuestaPorDefecto);
 
         if (file == null) {
             ctx.status(400).json(Map.of("status", "error", "mensaje", "No se adjuntó ningún archivo."));
@@ -52,42 +63,17 @@ public class EncuestaController {
 
         try (Connection conn = Database.getConnection()) {
             ExcelImporterService service = new ExcelImporterService();
-            int encuestasImportadas = service.importarRespuestasExcel(file.content(), encuestaId, conn);
+            ExcelImporterService.Resultado r = service.importar(file.content(), encuestaId, conn);
 
             ctx.json(Map.of(
                 "status", "success",
-                "mensaje", "Se importaron exitosamente " + encuestasImportadas + " encuestas completas."
+                "mensaje", "Se importaron exitosamente " + r.encuestas + " encuestas (encuesta " + encuestaId + ")."
             ));
         } catch (Exception e) {
             e.printStackTrace();
             ctx.status(500).json(Map.of(
                 "status", "error",
-                "mensaje", "Error al procesar el archivo Excel: " + e.getMessage()
-            ));
-        }
-    }
-    public static void importarExcelEmpleadores(Context ctx) {
-        UploadedFile file = ctx.uploadedFile("archivoExcel");
-        int encuestaIdEmpleadores = 2; // ID correspondiente a la encuesta de empleadores en la BD
-
-        if (file == null) {
-            ctx.status(400).json(Map.of("status", "error", "mensaje", "No se adjuntó ningún archivo Excel."));
-            return;
-        }
-
-        try (Connection conn = Database.getConnection()) {
-            ExcelImporterService service = new ExcelImporterService();
-            int encuestasImportadas = service.importarRespuestasExcel(file.content(), encuestaIdEmpleadores, conn);
-
-            ctx.json(Map.of(
-                "status", "success",
-                "mensaje", "Se importaron exitosamente " + encuestasImportadas + " encuestas de empleadores."
-            ));
-        } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).json(Map.of(
-                "status", "error",
-                "mensaje", "Error al procesar el archivo de empleadores: " + e.getMessage()
+                "mensaje", "Error al importar el archivo: " + e.getMessage()
             ));
         }
     }
