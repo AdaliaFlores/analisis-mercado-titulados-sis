@@ -127,6 +127,43 @@
                     </div>
                 </div>
             </div>
+            <!-- Sección para importar datos dentro de dashboard.html -->
+            <div class="card p-4 shadow-sm mb-4">
+                <h5 class="card-title">Importar Encuestas desde Excel</h5>
+                <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de los titulados.</p>
+                
+                <form id="formImportarExcel" class="row g-3 align-items-center">
+                    <div class="col-auto">
+                        <input type="file" id="inputExcel" class="form-control" accept=".xlsx, .xls" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" id="btnSubirExcel" class="btn btn-primary">
+                            Subir e Importar
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Mensaje de respuesta visual para el usuario -->
+                <div id="mensajeImportacion" class="mt-3" style="display: none;"></div>
+            </div>
+             <!-- Sección para importar datos de empleadores en dashboard.html -->
+            <div class="card p-4 shadow-sm mb-4">
+                <h5 class="card-title">Importar Encuestas de Empleadores</h5>
+                <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de la encuesta a empleadores.</p>
+                
+                <form id="formImportarEmpleadores" class="row g-3 align-items-center">
+                    <div class="col-auto">
+                        <input type="file" id="inputExcelEmpleadores" class="form-control" accept=".xlsx, .xls" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" id="btnSubirEmpleadores" class="btn btn-success">
+                            Subir e Importar Empleadores
+                        </button>
+                    </div>
+                </form>
+                
+                <div id="mensajeImportacionEmpleadores" class="mt-3" style="display: none;"></div>
+            </div>
         </div>
 
         <!-- ÁREA DONDE TUS COMPAÑEROS CONSTRUIRÁN SUS GRÁFICOS / TABLAS -->
@@ -258,6 +295,7 @@
     <script src="/js/reporte-desempleo.js"></script>
     <script src="/js/reporte-empleabilidad.js"></script>
     <script src="/js/reporte-formacion.js"></script>
+    <script src="/js/ImportExcel.js"></script>
     <!-- Script específico de dashboard cuando tus compañeros programen sus endpoints -->
     <!-- <script src="/js/dashboard.js"></script> -->
 </body>

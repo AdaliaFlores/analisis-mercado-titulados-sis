@@ -12,7 +12,7 @@ public class App {
     public static void main(String[] args) {
         var app = Javalin.create(config -> {
             config.staticFiles.add("/public");
-        }).start(8080);
+        }).start(7070);
 
         // Rutas API REST
         app.get("/api/encuestas", EncuestaController::listarEncuestas);
@@ -32,5 +32,7 @@ public class App {
         // Data Wrangling: corrección de respuestas de texto (con auditoría)
         app.put("/api/respuestas/{id}", RespuestaController::editar);
         app.get("/api/envios/{envioId}/auditoria", RespuestaController::auditoriaPorEnvio);
+        app.post("/api/import/excel", EncuestaController::importarExcel);
+        app.post("/api/import/excel/empleadores", EncuestaController::importarExcelEmpleadores);
     }
 }
