@@ -1,12 +1,16 @@
 package com.umss;
 
+import com.umss.controller.AnalisisController;
 import com.umss.controller.EncuestaController;
 import com.umss.controller.ExportController;
 
 import io.javalin.Javalin;
 import com.umss.controller.ReporteController;
+import com.umss.controller.ReporteHu12Controller;
 import com.umss.controller.RespuestaController;
 import com.umss.controller.EnvioController;
+import com.umss.controller.AnalisisController;
+import com.umss.controller.ReporteHu12Controller;
 
 public class App {
     public static void main(String[] args) {
@@ -32,6 +36,13 @@ public class App {
         // Data Wrangling: corrección de respuestas de texto (con auditoría)
         app.put("/api/respuestas/{id}", RespuestaController::editar);
         app.get("/api/envios/{envioId}/auditoria", RespuestaController::auditoriaPorEnvio);
+        // Análisis (HU11 y siguientes): genéricos para cualquier pregunta
+        app.get("/api/analisis/frecuencias", AnalisisController::frecuencias);
+        app.get("/api/analisis/promedio", AnalisisController::promedio);
+        app.get("/api/analisis/chi-cuadrado", AnalisisController::chiCuadrado);
+        // Análisis (HU12): específico para encuestas de titulados y empleadores
+        app.get("/api/reportes/hu12/frecuencias", ReporteHu12Controller::frecuencias);
+        app.get("/api/reportes/hu12/alumno", ReporteHu12Controller::alumno);
         app.post("/api/import/excel", EncuestaController::importarExcel);
         app.post("/api/import/excel/empleadores", EncuestaController::importarExcelEmpleadores);
     }
