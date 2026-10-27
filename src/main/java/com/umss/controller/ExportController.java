@@ -1,7 +1,10 @@
 package com.umss.controller;
 
+import com.umss.dao.AnalisisDAO;
 import com.umss.dao.EncuestaDAO;
+import com.umss.dao.ReporteHu12DAO;
 import com.umss.model.*;
+import com.umss.util.PruebaChiCuadrado;
 import io.javalin.http.Context;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -422,6 +425,70 @@ public class ExportController {
                     sb.append("NOTA: Este reporte se genera dinámicamente en la interfaz. Exportación tabular por defecto:\r\n\r\n");
                     sb.append("MATRIZ GENÉRICA (X × Y),VALOR_X,VALOR_Y,TOTAL\r\n");
                 }
+                case "ubicacion" -> {
+                    sb.append("=== PERTINENCIA CURRICULAR, GEOGRAFÍA Y FUGA DE TALENTOS (HU11) ===\r\n\r\n");
+
+                    // KPIs
+                    int[] k = kpisUbicacion();
+                    sb.append("=== INDICADORES CLAVE (p19: departamento de trabajo) ===\r\n");
+                    sb.append("INDICADOR,VALOR,%\r\n");
+                    sb.append("Titulados analizados,").append(k[0]).append(",").append(DF2.format(100.0)).append("\r\n");
+                    sb.append(csv("Trabajan en Cochabamba")).append(",").append(k[1]).append(",").append(DF2.format(pctDe(k[1], k[0]))).append("\r\n");
+                    sb.append(csv("Fuera del departamento base (fuga)")).append(",").append(k[2]).append(",").append(DF2.format(pctDe(k[2], k[0]))).append("\r\n");
+                    sb.append(csv("En el extranjero")).append(",").append(k[3]).append(",").append(DF2.format(pctDe(k[3], k[0]))).append("\r\n");
+                    sb.append("\r\n");
+
+                    // Dónde trabajan
+                    sb.append("=== ¿DÓNDE TRABAJAN LOS TITULADOS? (p19, opciones) ===\r\n");
+                    sb.append("DEPARTAMENTO,TOTAL,%\r\n");
+                    for (ConteoRespuesta c : AnalisisDAO.frecuencias(U_DEPTO, false, new FiltroEnvio())) {
+                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",")
+                          .append(DF2.format(c.getPorcentaje())).append("\r\n");
+                    }
+                    sb.append("\r\n");
+
+                    // Promedio salario por departamento
+                    appendPromedioCsv(sb, AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio()),
+                            "=== SALARIO PROMEDIO MENSUAL POR DEPARTAMENTO (p27 × p19) ===");
+
+                    // Promedio pertinencia por cargo
+                    appendPromedioCsv(sb, AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio()),
+                            "=== PERTINENCIA PROMEDIO POR CARGO (p24 × p22) ===");
+
+                    // Cruces con χ²
+                    ResultadoChiCuadrado c1 = chi2auto(U_DEPTO, U_SALARIO);
+                    sb.append("=== CRUCE: UBICACIÓN (p19) × NIVEL SALARIAL (p27) ===\r\n");
+                    appendChiCsv(sb, c1);
+                    appendChiMatrizCsv(sb, c1);
+
+                    ResultadoChiCuadrado c2 = chi2auto(U_CARGO, U_PERT);
+                    sb.append("=== CRUCE: CARGO (p22) × PERTINENCIA (p24) ===\r\n");
+                    appendChiCsv(sb, c2);
+                    appendChiMatrizCsv(sb, c2);
+
+                    ResultadoChiCuadrado c3 = chi2auto(U_DEPTO, U_PERT);
+                    sb.append("=== CRUCE: UBICACIÓN (p19) × PERTINENCIA (p24) ===\r\n");
+                    appendChiCsv(sb, c3);
+                    appendChiMatrizCsv(sb, c3);
+                }
+                case "hu12" -> {
+                    sb.append("=== DEMANDA EMPRESARIAL Y RED ALUMNO (HU12) ===\r\n\r\n");
+                    sb.append("=== GRUPO 1: DEMANDA EMPRESARIAL (encuesta 2) ===\r\n\r\n");
+                    for (int pid : HU12_DEMANDA) appendHu12Csv(sb, pid);
+                    sb.append("=== GRUPO 2: PERCEPCIÓN DE LA FORMACIÓN (encuesta 2) ===\r\n\r\n");
+                    for (int pid : HU12_PERCEPCION) appendHu12Csv(sb, pid);
+
+                    // Red alumno (resumen de consentimiento, p46)
+                    Map<String, Object> red = ReporteHu12DAO.obteneralumno();
+                    sb.append("=== GRUPO 3: RED ALUMNO - CONSENTIMIENTO DE CONTACTO (p46) ===\r\n");
+                    sb.append("INDICADOR,VALOR\r\n");
+                    sb.append("Total de titulados,").append(red.get("totalTitulados")).append("\r\n");
+                    sb.append(csv("Aceptaron ser contactados (p46 = Sí)")).append(",").append(red.get("aceptaron")).append("\r\n");
+                    sb.append("Con correo,").append(red.get("conCorreo")).append("\r\n");
+                    sb.append("Con teléfono,").append(red.get("conTelefono")).append("\r\n");
+                    sb.append("Con LinkedIn,").append(red.get("conLinkedin")).append("\r\n");
+                    sb.append("\r\nNOTA: El listado de contactos (correo/teléfono/LinkedIn) solo se muestra en la interfaz a usuarios autorizados.\r\n");
+                }
                 default -> sb.append("TIPO DE REPORTE NO SOPORTADO: ").append(csv(tipo)).append("\r\n");
             }
         } catch (Exception e) {
@@ -479,6 +546,330 @@ public class ExportController {
         List<ConteoRespuesta> lista = EncuestaDAO.asignaturasFrecuencia(44);
         if (lista.size() > n) return new ArrayList<>(lista.subList(0, n));
         return lista;
+    }
+
+    // ===== HU11 (Pertinencia/Geografía/Fuga de Talentos) y HU12 (Demanda empresarial y Red alumno) =====
+
+    /** Títulos de las preguntas de la HU12 (mismos que reporte-hu12.js). */
+    private static final Map<Integer, String> HU12_TITULOS = new LinkedHashMap<>();
+    static {
+        HU12_TITULOS.put(54, "Contratación de ingenieros en los últimos 5 años");
+        HU12_TITULOS.put(55, "Posibilidad de futuras contrataciones");
+        HU12_TITULOS.put(56, "Formación académica requerida");
+        HU12_TITULOS.put(57, "Medios de convocatoria");
+        HU12_TITULOS.put(58, "Cargos desempeñados por los titulados");
+        HU12_TITULOS.put(59, "Áreas de conocimiento y tendencias emergentes");
+        HU12_TITULOS.put(60, "Herramientas tecnológicas requeridas");
+        HU12_TITULOS.put(61, "Habilidades y competencias fundamentales");
+        HU12_TITULOS.put(62, "Confianza en la formación profesional");
+        HU12_TITULOS.put(63, "Consistencia del título con las competencias");
+        HU12_TITULOS.put(64, "Consulta sobre el perfil profesional");
+        HU12_TITULOS.put(65, "Conocimiento del perfil de egreso");
+        HU12_TITULOS.put(66, "Coherencia del perfil con el desempeño laboral");
+        HU12_TITULOS.put(67, "Formación y desempeño profesional integral");
+        HU12_TITULOS.put(68, "Incorporación de necesidades del sector");
+        HU12_TITULOS.put(69, "Comunicación, análisis y trabajo en equipo");
+        HU12_TITULOS.put(70, "Ética, responsabilidad social e inclusión");
+        HU12_TITULOS.put(71, "Participación en evaluación de titulados");
+        HU12_TITULOS.put(72, "Vínculos con organizaciones y oportunidades laborales");
+        HU12_TITULOS.put(73, "Actividades de vinculación laboral y tecnológica");
+        HU12_TITULOS.put(74, "Difusión de oportunidades laborales y pasantías");
+        HU12_TITULOS.put(75, "Encuentros entre empleadores y comunidad académica");
+        HU12_TITULOS.put(76, "Retroalimentación sobre el desempeño profesional");
+        HU12_TITULOS.put(77, "Consulta sobre la pertinencia de la formación");
+        HU12_TITULOS.put(78, "La UMSS como fuente de talento profesional");
+        HU12_TITULOS.put(79, "Participación en autoevaluación y mejora continua");
+    }
+    private static final List<Integer> HU12_DEMANDA = List.of(54, 55, 56, 57, 58, 59, 60, 61);
+    private static final List<Integer> HU12_PERCEPCION = List.of(62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79);
+
+    /** Preguntas clave del HU11 (encuesta de titulados). */
+    private static final int U_DEPTO = 19, U_CARGO = 22, U_PERT = 24, U_SALARIO = 27;
+
+    /** KPIs del HU11: {total, enCochabamba, fuga, enExtranjero} desde la p19 agrupada. */
+    private static int[] kpisUbicacion() throws Exception {
+        List<ConteoRespuesta> g = AnalisisDAO.frecuencias(U_DEPTO, true, new FiltroEnvio());
+        int total = 0, base = 0, ext = 0;
+        for (ConteoRespuesta c : g) {
+            total += c.getTotal();
+            if ("Cochabamba".equals(c.getRespuesta())) base = c.getTotal();
+            if ("Extranjero".equals(c.getRespuesta())) ext = c.getTotal();
+        }
+        return new int[]{total, base, total - base, ext};
+    }
+
+    /** Prueba χ² con el mismo modo "auto" del AnalisisController (completa → agrupada si no cumple supuestos). */
+    private static ResultadoChiCuadrado chi2auto(int x, int y) throws Exception {
+        FiltroEnvio f = new FiltroEnvio();
+        ResultadoChiCuadrado r = PruebaChiCuadrado.calcular(
+                AnalisisDAO.contingencia(x, y, false, f),
+                AnalisisDAO.ordenEtiquetas(x, false),
+                AnalisisDAO.ordenEtiquetas(y, false)).conModo("COMPLETA", null);
+        if (!r.cumpleSupuestos() && (AnalisisDAO.tieneAgrupacion(x) || AnalisisDAO.tieneAgrupacion(y))) {
+            r = PruebaChiCuadrado.calcular(
+                    AnalisisDAO.contingencia(x, y, true, f),
+                    AnalisisDAO.ordenEtiquetas(x, true),
+                    AnalisisDAO.ordenEtiquetas(y, true))
+                    .conModo("AGRUPADA",
+                            "Se aplicó la agrupación de categorías porque la tabla completa no cumplía los supuestos.");
+        }
+        return r;
+    }
+
+    private static String fmtPval(Double p) {
+        if (p == null) return "no calculable";
+        if (p < 0.0001) return "< 0.0001";
+        return DF3.format(p);
+    }
+
+    /** Encabezado χ² (modo, N, gl, χ², crítico, p, decisión) como líneas clave,valor. */
+    private static void appendChiCsv(StringBuilder sb, ResultadoChiCuadrado r) {
+        sb.append("MODO,").append(csv(r.modoAplicado())).append("\r\n");
+        sb.append("N,").append(r.n()).append("\r\n");
+        sb.append("GRADOS_DE_LIBERTAD,").append(r.gradosLibertad()).append("\r\n");
+        sb.append("CHI2,").append(r.chiCuadrado() == null ? "no calculable" : DF3.format(r.chiCuadrado())).append("\r\n");
+        sb.append("VALOR_CRITICO,").append(r.valorCritico() == null ? "no calculable" : DF3.format(r.valorCritico())).append("\r\n");
+        sb.append("P_VALOR,").append(fmtPval(r.pValor())).append("\r\n");
+        sb.append("RECHAZA_INDEPENDENCIA,").append(r.rechazaIndependencia() == null ? "no calculable"
+                : (r.rechazaIndependencia() ? "SÍ" : "NO")).append("\r\n");
+        for (String a : r.advertencias()) sb.append("AVISO,").append(csv(a)).append("\r\n");
+        sb.append("\r\n");
+    }
+
+    /** Matriz observada/esperada/contribución en formato largo (una fila por celda) + totales. */
+    private static void appendChiMatrizCsv(StringBuilder sb, ResultadoChiCuadrado r) {
+        sb.append("FILA,COLUMNA,OBSERVADA,ESPERADA,CONTRIBUCION\r\n");
+        for (int i = 0; i < r.etiquetasFila().size(); i++)
+            for (int j = 0; j < r.etiquetasColumna().size(); j++)
+                sb.append(csv(r.etiquetasFila().get(i))).append(",")
+                  .append(csv(r.etiquetasColumna().get(j))).append(",")
+                  .append(r.observada()[i][j]).append(",")
+                  .append(DF2.format(r.esperada()[i][j])).append(",")
+                  .append(DF3.format(r.contribucion()[i][j])).append("\r\n");
+        sb.append("\r\nTOTALES_FILA_OBSERVADA\r\n");
+        for (int i = 0; i < r.etiquetasFila().size(); i++)
+            sb.append(csv(r.etiquetasFila().get(i))).append(",").append(r.totalesFila()[i]).append("\r\n");
+        sb.append("TOTALES_COLUMNA_OBSERVADA\r\n");
+        for (int j = 0; j < r.etiquetasColumna().size(); j++)
+            sb.append(csv(r.etiquetasColumna().get(j))).append(",").append(r.totalesColumna()[j]).append("\r\n");
+        sb.append("\r\n");
+    }
+
+    /** Tabla de promedios por grupo (salario/pertinencia) en CSV. */
+    private static void appendPromedioCsv(StringBuilder sb, ResultadoPromedio r, String cabecera) {
+        sb.append(cabecera).append("\r\n");
+        sb.append("GRUPO,n,SUMA,MEDIA,DESV_EST,MUESTRA_SUFICIENTE\r\n");
+        for (ResumenGrupo g : r.grupos()) {
+            sb.append(csv(g.grupo())).append(",").append(g.n()).append(",")
+              .append(DF2.format(g.suma())).append(",")
+              .append(g.media() == null ? "" : DF2.format(g.media())).append(",")
+              .append(g.desviacion() == null ? "" : DF2.format(g.desviacion())).append(",")
+              .append(g.muestraSuficiente() ? "SÍ" : "NO (n < 5)").append("\r\n");
+        }
+        sb.append("GENERAL,").append(r.n()).append(",").append(DF2.format(r.suma())).append(",")
+          .append(r.mediaGlobal() == null ? "" : DF2.format(r.mediaGlobal())).append(",,\r\n\r\n");
+    }
+
+    /** Frecuencias de una pregunta HU12 (encuesta 2) en CSV. */
+    private static void appendHu12Csv(StringBuilder sb, int pid) throws Exception {
+        Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> cats = (List<Map<String, Object>>) f.get("categorias");
+        sb.append("=== P").append(pid).append(": ").append(csv(HU12_TITULOS.getOrDefault(pid, "")))
+          .append(" (N=").append(f.get("total")).append(") ===\r\n");
+        sb.append("RESPUESTA,TOTAL,%\r\n");
+        if (cats != null) {
+            for (Map<String, Object> c : cats) {
+                sb.append(csv(String.valueOf(c.get("respuesta")))).append(",")
+                  .append(c.get("total")).append(",")
+                  .append(DF2.format(((Number) c.get("porcentaje")).doubleValue())).append("\r\n");
+            }
+        }
+        sb.append("\r\n");
+    }
+
+    /** Bloque χ² para Excel: estadísticos + matriz larga. Devuelve la próxima fila libre. */
+    private static int addChiExcel(Sheet sh, int ri, CellStyle hs, String titulo, ResultadoChiCuadrado r) {
+        Row rt = sh.createRow(ri++);
+        rt.createCell(0).setCellValue(titulo);
+        styleRow(rt, hs);
+        addKV(sh, ri++, "Modo", r.modoAplicado());
+        addKV(sh, ri++, "N", r.n());
+        addKV(sh, ri++, "Grados de libertad", r.gradosLibertad());
+        addKV(sh, ri++, "χ²", r.chiCuadrado() == null ? "no calculable" : DF3.format(r.chiCuadrado()));
+        addKV(sh, ri++, "Valor crítico", r.valorCritico() == null ? "no calculable" : DF3.format(r.valorCritico()));
+        addKV(sh, ri++, "Valor p", fmtPval(r.pValor()));
+        addKV(sh, ri++, "Rechaza independencia", r.rechazaIndependencia() == null ? "no calculable"
+                : (r.rechazaIndependencia() ? "SÍ" : "NO"));
+        for (String a : r.advertencias()) addKV(sh, ri++, "Aviso", a);
+        Row rh = sh.createRow(ri++);
+        rh.createCell(0).setCellValue("FILA");
+        rh.createCell(1).setCellValue("COLUMNA");
+        rh.createCell(2).setCellValue("OBSERVADA");
+        rh.createCell(3).setCellValue("ESPERADA");
+        rh.createCell(4).setCellValue("CONTRIBUCIÓN");
+        styleRow(rh, hs);
+        for (int i = 0; i < r.etiquetasFila().size(); i++)
+            for (int j = 0; j < r.etiquetasColumna().size(); j++) {
+                Row rr = sh.createRow(ri++);
+                rr.createCell(0).setCellValue(r.etiquetasFila().get(i));
+                rr.createCell(1).setCellValue(r.etiquetasColumna().get(j));
+                rr.createCell(2).setCellValue(r.observada()[i][j]);
+                rr.createCell(3).setCellValue(r.esperada()[i][j]);
+                rr.createCell(4).setCellValue(r.contribucion()[i][j]);
+            }
+        return ri + 1;
+    }
+
+    /** Tabla de promedios por grupo para Excel. Devuelve la próxima fila libre. */
+    private static int addPromedioExcel(Sheet sh, int ri, CellStyle hs, String titulo, ResultadoPromedio r) {
+        Row rt = sh.createRow(ri++);
+        rt.createCell(0).setCellValue(titulo);
+        styleRow(rt, hs);
+        Row rh = sh.createRow(ri++);
+        rh.createCell(0).setCellValue("GRUPO");
+        rh.createCell(1).setCellValue("n");
+        rh.createCell(2).setCellValue("SUMA");
+        rh.createCell(3).setCellValue("MEDIA");
+        rh.createCell(4).setCellValue("DESV. EST.");
+        rh.createCell(5).setCellValue("MUESTRA SUFICIENTE");
+        styleRow(rh, hs);
+        for (ResumenGrupo g : r.grupos()) {
+            Row rr = sh.createRow(ri++);
+            rr.createCell(0).setCellValue(g.grupo());
+            rr.createCell(1).setCellValue(g.n());
+            rr.createCell(2).setCellValue(g.suma());
+            rr.createCell(3).setCellValue(g.media() == null ? 0.0 : g.media());
+            rr.createCell(4).setCellValue(g.desviacion() == null ? 0.0 : g.desviacion());
+            rr.createCell(5).setCellValue(g.muestraSuficiente() ? "SÍ" : "NO (n < 5)");
+        }
+        Row rg = sh.createRow(ri++);
+        rg.createCell(0).setCellValue("GENERAL");
+        rg.createCell(1).setCellValue(r.n());
+        rg.createCell(2).setCellValue(r.suma());
+        rg.createCell(3).setCellValue(r.mediaGlobal() == null ? 0.0 : r.mediaGlobal());
+        styleRow(rg, hs);
+        return ri + 1;
+    }
+
+    /** Bloque de una pregunta HU12 en Excel (encuesta 2). Devuelve la próxima fila libre. */
+    private static int addHu12Block(Sheet sh, int ri, CellStyle hs, int pid) throws Exception {
+        Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> cats = (List<Map<String, Object>>) f.get("categorias");
+        Row rt = sh.createRow(ri++);
+        rt.createCell(0).setCellValue("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, "")
+                + " (N=" + f.get("total") + ")");
+        styleRow(rt, hs);
+        Row rh = sh.createRow(ri++);
+        rh.createCell(0).setCellValue("RESPUESTA");
+        rh.createCell(1).setCellValue("TOTAL");
+        rh.createCell(2).setCellValue("%");
+        styleRow(rh, hs);
+        if (cats != null) {
+            for (Map<String, Object> c : cats) {
+                Row rr = sh.createRow(ri++);
+                rr.createCell(0).setCellValue(String.valueOf(c.get("respuesta")));
+                rr.createCell(1).setCellValue(((Number) c.get("total")).intValue());
+                rr.createCell(2).setCellValue(((Number) c.get("porcentaje")).doubleValue());
+            }
+        }
+        return ri + 1;
+    }
+
+    /** Tabla χ² para PDF: estadísticos + matriz observada/esperada/contribución + totales. */
+    private static void htmlChi(StringBuilder sb, ResultadoChiCuadrado r) {
+        sb.append("<table><tr><th>MODO</th><th>N</th><th>GL</th><th class='num'>χ²</th><th class='num'>VALOR CRÍTICO</th><th class='num'>VALOR P</th><th>RECHAZA INDEPENDENCIA</th></tr>");
+        sb.append("<tr><td>").append(esc(r.modoAplicado())).append("</td><td>").append(r.n())
+          .append("</td><td>").append(r.gradosLibertad())
+          .append("</td><td class='num'>").append(r.chiCuadrado() == null ? "no calculable" : DF3.format(r.chiCuadrado()))
+          .append("</td><td class='num'>").append(r.valorCritico() == null ? "no calculable" : DF3.format(r.valorCritico()))
+          .append("</td><td class='num'>").append(fmtPval(r.pValor()))
+          .append("</td><td>").append(r.rechazaIndependencia() == null ? "no calculable"
+                  : (r.rechazaIndependencia() ? "SÍ" : "NO")).append("</td></tr></table>");
+        for (String a : r.advertencias())
+            sb.append("<div class='alert'><strong>Aviso:</strong> ").append(esc(a)).append("</div>");
+        sb.append("<h4>Frecuencias observadas (O)</h4>");
+        htmlChiMatriz(sb, r, false);
+        sb.append("<h4>Frecuencias esperadas (E)</h4>");
+        htmlChiMatriz(sb, r, true);
+    }
+
+    private static void htmlChiMatriz(StringBuilder sb, ResultadoChiCuadrado r, boolean esperada) {
+        sb.append("<table><tr><th>FILA \\ COLUMNA</th>");
+        for (String c : r.etiquetasColumna()) sb.append("<th class='num'>").append(esc(c)).append("</th>");
+        sb.append("<th class='num'>TOTAL</th></tr>");
+        for (int i = 0; i < r.etiquetasFila().size(); i++) {
+            sb.append("<tr><th>").append(esc(r.etiquetasFila().get(i))).append("</th>");
+            for (int j = 0; j < r.etiquetasColumna().size(); j++)
+                sb.append("<td class='num'>").append(esperada
+                        ? DF2.format(r.esperada()[i][j]) : r.observada()[i][j]).append("</td>");
+            sb.append("<td class='num fw-bold'>").append(r.totalesFila()[i]).append("</td></tr>");
+        }
+        sb.append("<tr class='table-secondary fw-bold'><th>Total</th>");
+        for (int j = 0; j < r.etiquetasColumna().size(); j++)
+            sb.append("<td class='num'>").append(r.totalesColumna()[j]).append("</td>");
+        sb.append("<td class='num'>").append(r.n()).append("</td></tr></table>");
+    }
+
+    /** Tabla de promedios por grupo para PDF. */
+    private static void htmlPromedio(StringBuilder sb, ResultadoPromedio r) {
+        sb.append("<table><tr><th>GRUPO</th><th class='num'>n</th><th class='num'>SUMA (Σ)</th><th class='num'>MEDIA</th><th class='num'>DESV. EST.</th><th>OBSERVACIÓN</th></tr>");
+        for (ResumenGrupo g : r.grupos()) {
+            sb.append("<tr").append(g.muestraSuficiente() ? "" : " style='background:#fff3cd'").append("><td>")
+              .append(esc(g.grupo())).append("</td><td class='num'>").append(g.n())
+              .append("</td><td class='num'>").append(DF2.format(g.suma()))
+              .append("</td><td class='num fw-bold'>").append(g.media() == null ? "—" : DF2.format(g.media()))
+              .append("</td><td class='num'>").append(g.desviacion() == null ? "—" : DF2.format(g.desviacion()))
+              .append("</td><td class='small'>").append(g.muestraSuficiente() ? "" : "n &lt; 5: poco confiable")
+              .append(g.sinCodificar() > 0 ? " · " + g.sinCodificar() + " sin valor asignado" : "")
+              .append("</td></tr>");
+        }
+        sb.append("<tr class='table-secondary fw-bold'><th>General</th><td class='num'>").append(r.n())
+          .append("</td><td class='num'>").append(DF2.format(r.suma()))
+          .append("</td><td class='num'>").append(r.mediaGlobal() == null ? "—" : DF2.format(r.mediaGlobal()))
+          .append("</td><td></td><td></td></tr></table>");
+    }
+
+    /** Tabla de una pregunta HU12 para PDF (encuesta 2). */
+    private static void htmlHu12(StringBuilder sb, int pid) throws Exception {
+        Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> cats = (List<Map<String, Object>>) f.get("categorias");
+        sb.append("<h3>P").append(pid).append(": ").append(esc(HU12_TITULOS.getOrDefault(pid, "")))
+          .append(" <span class='meta'>(N = ").append(f.get("total")).append(")</span></h3>");
+        if (cats == null || cats.isEmpty()) {
+            sb.append("<p class='meta'>Sin respuestas para esta pregunta.</p>");
+            return;
+        }
+        sb.append("<table><tr><th>RESPUESTA</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
+        for (Map<String, Object> c : cats)
+            sb.append("<tr><td>").append(esc(String.valueOf(c.get("respuesta")))).append("</td><td class='num'>")
+              .append(c.get("total")).append("</td><td class='num'>")
+              .append(DF2.format(((Number) c.get("porcentaje")).doubleValue())).append("</td></tr>");
+        sb.append("</table>");
+    }
+
+    /** Gráfico de barras de una pregunta HU12 (top 10 para texto abierto, como en la interfaz). */
+    private static byte[] hu12Chart(int pid) throws Exception {
+        Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> cats = new ArrayList<>((List<Map<String, Object>>) f.get("categorias"));
+        if (cats.isEmpty()) return new byte[0];
+        boolean textoAbierto = pid == 59 || pid == 60 || pid == 61;
+        if (textoAbierto) {
+            cats.sort((a, b) -> ((Number) b.get("total")).intValue() - ((Number) a.get("total")).intValue());
+            if (cats.size() > 10) cats = new ArrayList<>(cats.subList(0, 10));
+        }
+        List<String> etiquetas = new ArrayList<>();
+        List<Double> valores = new ArrayList<>();
+        for (Map<String, Object> c : cats) {
+            String et = String.valueOf(c.get("respuesta"));
+            if (et.length() > 45) et = et.substring(0, 42) + "...";
+            etiquetas.add(et);
+            valores.add(((Number) c.get("total")).doubleValue());
+        }
+        return chartBar("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, ""), "Respuesta", "Total", etiquetas, valores, "Total");
     }
 
     // Resumen de Ecosistema de Emprendimiento e Innovación (mismo que la interfaz)
@@ -879,6 +1270,87 @@ public class ExportController {
                     Row rr = sh.createRow(rowIdx++);
                     rr.createCell(0).setCellValue("Reporte de cruce dinámico. Use la interfaz para generar matrices específicas.");
                 }
+                case "ubicacion" -> {
+                    rowIdx++;
+                    // KPIs
+                    int[] k = kpisUbicacion();
+                    Row rhK = sh.createRow(rowIdx++);
+                    rhK.createCell(0).setCellValue("INDICADOR");
+                    rhK.createCell(1).setCellValue("VALOR");
+                    rhK.createCell(2).setCellValue("%");
+                    styleRow(rhK, headerStyle);
+                    Row r0 = sh.createRow(rowIdx++);
+                    r0.createCell(0).setCellValue("Titulados analizados");
+                    r0.createCell(1).setCellValue(k[0]);
+                    r0.createCell(2).setCellValue(100.0);
+                    Row r1 = sh.createRow(rowIdx++);
+                    r1.createCell(0).setCellValue("Trabajan en Cochabamba");
+                    r1.createCell(1).setCellValue(k[1]);
+                    r1.createCell(2).setCellValue(pctDe(k[1], k[0]));
+                    Row r2 = sh.createRow(rowIdx++);
+                    r2.createCell(0).setCellValue("Fuera del departamento base (fuga)");
+                    r2.createCell(1).setCellValue(k[2]);
+                    r2.createCell(2).setCellValue(pctDe(k[2], k[0]));
+                    Row r3 = sh.createRow(rowIdx++);
+                    r3.createCell(0).setCellValue("En el extranjero");
+                    r3.createCell(1).setCellValue(k[3]);
+                    r3.createCell(2).setCellValue(pctDe(k[3], k[0]));
+                    rowIdx++;
+
+                    // Dónde trabajan
+                    Row rhD = sh.createRow(rowIdx++);
+                    rhD.createCell(0).setCellValue("¿DÓNDE TRABAJAN LOS TITULADOS? (p19)");
+                    rhD.createCell(1).setCellValue("TOTAL");
+                    rhD.createCell(2).setCellValue("%");
+                    styleRow(rhD, headerStyle);
+                    for (ConteoRespuesta c : AnalisisDAO.frecuencias(U_DEPTO, false, new FiltroEnvio())) {
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(c.getRespuesta());
+                        rr.createCell(1).setCellValue(c.getTotal());
+                        rr.createCell(2).setCellValue(c.getPorcentaje());
+                    }
+                    rowIdx++;
+
+                    // Promedios
+                    rowIdx = addPromedioExcel(sh, rowIdx, headerStyle,
+                            "SALARIO PROMEDIO MENSUAL POR DEPARTAMENTO (p27 × p19)",
+                            AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio())) + 1;
+                    rowIdx = addPromedioExcel(sh, rowIdx, headerStyle,
+                            "PERTINENCIA PROMEDIO POR CARGO (p24 × p22)",
+                            AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio())) + 1;
+
+                    // Cruces χ²
+                    rowIdx = addChiExcel(sh, rowIdx, headerStyle,
+                            "CRUCE: UBICACIÓN (p19) × NIVEL SALARIAL (p27)", chi2auto(U_DEPTO, U_SALARIO)) + 1;
+                    rowIdx = addChiExcel(sh, rowIdx, headerStyle,
+                            "CRUCE: CARGO (p22) × PERTINENCIA (p24)", chi2auto(U_CARGO, U_PERT)) + 1;
+                    rowIdx = addChiExcel(sh, rowIdx, headerStyle,
+                            "CRUCE: UBICACIÓN (p19) × PERTINENCIA (p24)", chi2auto(U_DEPTO, U_PERT)) + 1;
+                }
+                case "hu12" -> {
+                    rowIdx++;
+                    Row rh1 = sh.createRow(rowIdx++);
+                    rh1.createCell(0).setCellValue("GRUPO 1: DEMANDA EMPRESARIAL (encuesta 2)");
+                    styleRow(rh1, headerStyle);
+                    for (int pid : HU12_DEMANDA) rowIdx = addHu12Block(sh, rowIdx, headerStyle, pid) + 1;
+                    Row rh2 = sh.createRow(rowIdx++);
+                    rh2.createCell(0).setCellValue("GRUPO 2: PERCEPCIÓN DE LA FORMACIÓN (encuesta 2)");
+                    styleRow(rh2, headerStyle);
+                    for (int pid : HU12_PERCEPCION) rowIdx = addHu12Block(sh, rowIdx, headerStyle, pid) + 1;
+
+                    // Red alumno
+                    Map<String, Object> red = ReporteHu12DAO.obteneralumno();
+                    Row rh3 = sh.createRow(rowIdx++);
+                    rh3.createCell(0).setCellValue("GRUPO 3: RED ALUMNO - CONSENTIMIENTO DE CONTACTO (p46)");
+                    styleRow(rh3, headerStyle);
+                    addKV(sh, rowIdx++, "Total de titulados", red.get("totalTitulados"));
+                    addKV(sh, rowIdx++, "Aceptaron ser contactados (p46 = Sí)", red.get("aceptaron"));
+                    addKV(sh, rowIdx++, "Con correo", red.get("conCorreo"));
+                    addKV(sh, rowIdx++, "Con teléfono", red.get("conTelefono"));
+                    addKV(sh, rowIdx++, "Con LinkedIn", red.get("conLinkedin"));
+                    Row rNot = sh.createRow(rowIdx++);
+                    rNot.createCell(0).setCellValue("NOTA: El listado de contactos solo se muestra en la interfaz a usuarios autorizados.");
+                }
                 default -> {
                     Row rr = sh.createRow(rowIdx++);
                     rr.createCell(0).setCellValue("TIPO NO IMPLEMENTADO: " + tipo);
@@ -1012,6 +1484,39 @@ public class ExportController {
                 insertarImagen(wb, sh, chartBar("Oferta con poca demanda: razones críticas (p28)", "Razón", "Frecuencia",
                         criticas.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
                         criticas.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"), COL, row, COL + ANCHO_COLS, row + 24);
+            }
+            case "ubicacion" -> {
+                // Dónde trabajan
+                List<ConteoRespuesta> deptos = list(AnalisisDAO.frecuencias(U_DEPTO, false, new FiltroEnvio()));
+                insertarImagen(wb, sh, chartBar("¿Dónde trabajan los titulados? (p19)", "Departamento", "Titulados",
+                        deptos.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                        deptos.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Titulados"),
+                        COL, row, COL + ANCHO_COLS, row + 24);
+                row += 25;
+
+                // Salario promedio por departamento
+                ResultadoPromedio sal = AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio());
+                List<String> catsS = new ArrayList<>();
+                List<Double> valsS = new ArrayList<>();
+                for (ResumenGrupo g : sal.grupos()) { catsS.add(g.grupo()); valsS.add(g.media() == null ? 0.0 : g.media()); }
+                insertarImagen(wb, sh, chartBar("Salario promedio mensual por departamento (Bs.)", "Departamento", "Media (Bs.)",
+                        catsS, valsS, "Media"), COL, row, COL + ANCHO_COLS, row + 24);
+                row += 25;
+
+                // Pertinencia promedio por cargo
+                ResultadoPromedio pert = AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio());
+                List<String> catsP = new ArrayList<>();
+                List<Double> valsP = new ArrayList<>();
+                for (ResumenGrupo g : pert.grupos()) { catsP.add(g.grupo()); valsP.add(g.media() == null ? 0.0 : g.media()); }
+                insertarImagen(wb, sh, chartBar("Pertinencia promedio por cargo (1-4)", "Cargo", "Media",
+                        catsP, valsP, "Media"), COL, row, COL + ANCHO_COLS, row + 24);
+            }
+            case "hu12" -> {
+                // Un gráfico por pregunta de demanda empresarial (encuesta 2).
+                for (int pid : HU12_DEMANDA) {
+                    insertarImagen(wb, sh, hu12Chart(pid), COL, row, COL + ANCHO_COLS, row + 22);
+                    row += 23;
+                }
             }
             default -> { /* sin gráficos */ }
         }
@@ -1339,6 +1844,74 @@ public class ExportController {
                 case "cruce" -> {
                     sb.append("<h2>6. Cruce de Variables</h2>");
                     sb.append("<p>El cruce dinámico (X × Y) se configura en la interfaz gráfica. Esta exportación presenta la estructura de matrices de frecuencia cruzada para referencia.</p>");
+                }
+                case "ubicacion" -> {
+                    sb.append("<h2>7. Pertinencia Curricular, Geografía y Fuga de Talentos (HU11)</h2>");
+                    int[] k = kpisUbicacion();
+                    sb.append("<h3>Indicadores clave (p19: departamento de trabajo)</h3>");
+                    sb.append("<table><tr><th>INDICADOR</th><th class='num'>VALOR</th><th class='num'>%</th></tr>");
+                    sb.append("<tr><td>Titulados analizados</td><td class='num'>").append(k[0]).append("</td><td class='num'>")
+                      .append(DF2.format(100.0)).append("</td></tr>");
+                    sb.append("<tr><td>Trabajan en Cochabamba</td><td class='num'>").append(k[1]).append("</td><td class='num'>")
+                      .append(DF2.format(pctDe(k[1], k[0]))).append("</td></tr>");
+                    sb.append("<tr><td>Fuera del departamento base (fuga)</td><td class='num'>").append(k[2]).append("</td><td class='num'>")
+                      .append(DF2.format(pctDe(k[2], k[0]))).append("</td></tr>");
+                    sb.append("<tr><td>En el extranjero</td><td class='num'>").append(k[3]).append("</td><td class='num'>")
+                      .append(DF2.format(pctDe(k[3], k[0]))).append("</td></tr></table>");
+
+                    sb.append("<h3>¿Dónde trabajan los titulados? (p19)</h3>");
+                    List<ConteoRespuesta> deptosH = AnalisisDAO.frecuencias(U_DEPTO, false, new FiltroEnvio());
+                    sb.append("<table><tr><th>DEPARTAMENTO</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
+                    for (ConteoRespuesta c : deptosH)
+                        sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>")
+                          .append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(c.getPorcentaje())).append("</td></tr>");
+                    sb.append("</table>");
+
+                    sb.append("<h3>Salario promedio mensual por departamento (p27 × p19)</h3>");
+                    htmlPromedio(sb, AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio()));
+
+                    sb.append("<h3>Pertinencia promedio por cargo (p24 × p22)</h3>");
+                    htmlPromedio(sb, AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio()));
+
+                    sb.append("<h3>Cruce: Ubicación (p19) × Nivel salarial (p27)</h3>");
+                    htmlChi(sb, chi2auto(U_DEPTO, U_SALARIO));
+                    sb.append("<h3>Cruce: Cargo (p22) × Pertinencia (p24)</h3>");
+                    htmlChi(sb, chi2auto(U_CARGO, U_PERT));
+                    sb.append("<h3>Cruce: Ubicación (p19) × Pertinencia (p24)</h3>");
+                    htmlChi(sb, chi2auto(U_DEPTO, U_PERT));
+
+                    // Gráficos
+                    List<String> catsD = deptosH.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList());
+                    List<Double> valsD = deptosH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList());
+                    sb.append(htmlChart("¿Dónde trabajan los titulados? (p19)", chartBar("¿Dónde trabajan los titulados?", "Departamento", "Titulados", catsD, valsD, "Titulados")));
+                    ResultadoPromedio salH = AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio());
+                    List<String> catsS = new ArrayList<>(); List<Double> valsS = new ArrayList<>();
+                    for (ResumenGrupo g : salH.grupos()) { catsS.add(g.grupo()); valsS.add(g.media() == null ? 0.0 : g.media()); }
+                    sb.append(htmlChart("Salario promedio mensual por departamento (Bs.)", chartBar("Salario promedio por departamento", "Departamento", "Media (Bs.)", catsS, valsS, "Media")));
+                    ResultadoPromedio pertH = AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio());
+                    List<String> catsP = new ArrayList<>(); List<Double> valsP = new ArrayList<>();
+                    for (ResumenGrupo g : pertH.grupos()) { catsP.add(g.grupo()); valsP.add(g.media() == null ? 0.0 : g.media()); }
+                    sb.append(htmlChart("Pertinencia promedio por cargo (1-4)", chartBar("Pertinencia promedio por cargo", "Cargo", "Media", catsP, valsP, "Media")));
+                }
+                case "hu12" -> {
+                    sb.append("<h2>8. Demanda Empresarial y Red Alumno (HU12)</h2>");
+                    sb.append("<h3>Grupo 1: Demanda empresarial (encuesta 2)</h3>");
+                    for (int pid : HU12_DEMANDA) htmlHu12(sb, pid);
+                    sb.append("<h3>Grupo 2: Percepción de la formación (encuesta 2)</h3>");
+                    for (int pid : HU12_PERCEPCION) htmlHu12(sb, pid);
+
+                    Map<String, Object> red = ReporteHu12DAO.obteneralumno();
+                    sb.append("<h3>Grupo 3: Red Alumno - Consentimiento de contacto (p46)</h3>");
+                    sb.append("<table><tr><th>INDICADOR</th><th class='num'>VALOR</th></tr>");
+                    sb.append("<tr><td>Total de titulados</td><td class='num'>").append(red.get("totalTitulados")).append("</td></tr>");
+                    sb.append("<tr><td>Aceptaron ser contactados (p46 = Sí)</td><td class='num'>").append(red.get("aceptaron")).append("</td></tr>");
+                    sb.append("<tr><td>Con correo</td><td class='num'>").append(red.get("conCorreo")).append("</td></tr>");
+                    sb.append("<tr><td>Con teléfono</td><td class='num'>").append(red.get("conTelefono")).append("</td></tr>");
+                    sb.append("<tr><td>Con LinkedIn</td><td class='num'>").append(red.get("conLinkedin")).append("</td></tr></table>");
+                    sb.append("<p class='meta'>El listado de contactos (correo/teléfono/LinkedIn) solo se muestra en la interfaz a usuarios autorizados.</p>");
+
+                    // Gráficos: demanda empresarial
+                    for (int pid : HU12_DEMANDA) sb.append(htmlChart("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, ""), hu12Chart(pid)));
                 }
                 default -> sb.append("<p>Tipo de reporte no soportado para exportación completa.</p>");
             }
