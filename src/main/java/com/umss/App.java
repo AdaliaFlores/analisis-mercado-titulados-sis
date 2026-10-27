@@ -9,8 +9,6 @@ import com.umss.controller.ReporteController;
 import com.umss.controller.ReporteHu12Controller;
 import com.umss.controller.RespuestaController;
 import com.umss.controller.EnvioController;
-import com.umss.controller.AnalisisController;
-import com.umss.controller.ReporteHu12Controller;
 
 public class App {
     public static void main(String[] args) {
