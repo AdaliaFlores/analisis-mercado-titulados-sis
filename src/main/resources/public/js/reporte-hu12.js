@@ -120,56 +120,66 @@
         const suma = categorias.reduce((total, c) => total + c.cantidad, 0);
         const total = numero(datos?.total) || suma;
         const idCanvas = `${prefijo}_grafico_${pregunta.id}`;
+        const ocultarTabla = [58, 59, 60, 61].includes(pregunta.id);
 
         const columna = document.createElement('div');
         columna.className = 'col-12 col-lg-6';
 
         columna.innerHTML = `
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between gap-2 mb-3">
-                        <h6 class="fw-bold mb-0">
-                            ${pregunta.id}. ${escapar(pregunta.titulo)}
-                        </h6>
-                        <span class="badge text-bg-secondary align-self-start">
-                            N = ${total}
-                        </span>
-                    </div>
-                    ${
-                        categorias.length
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between gap-2 mb-3">
+                    <h6 class="fw-bold mb-0">
+                        ${pregunta.id}. ${escapar(pregunta.titulo)}
+                    </h6>
+                    <span class="badge text-bg-secondary align-self-start">
+                        N = ${total}
+                    </span>
+                </div>
+
+                ${
+                    categorias.length
                         ? `
                             <canvas id="${idCanvas}" height="180"></canvas>
-                            <div class="table-responsive mt-3">
-                                <table class="table table-sm table-striped align-middle mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Respuesta</th>
-                                            <th class="text-end">Cantidad</th>
-                                            <th class="text-end">Porcentaje</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${categorias.map(c => {
-                                            const porcentaje = c.porcentaje == null
-                                                ? (suma ? c.cantidad * 100 / suma : 0)
-                                                : c.porcentaje;
 
-                                            return `
-                                                <tr>
-                                                    <td>${escapar(c.etiqueta)}</td>
-                                                    <td class="text-end">${c.cantidad}</td>
-                                                    <td class="text-end">
-                                                        ${porcentaje.toFixed(1)}%
-                                                    </td>
-                                                </tr>`;
-                                        }).join('')}
-                                    </tbody>
-                                </table>
-                            </div>`
+                            ${
+                                !ocultarTabla
+                                    ? `
+                                        <div class="table-responsive mt-3">
+                                            <table class="table table-sm table-striped align-middle mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Respuesta</th>
+                                                        <th class="text-end">Cantidad</th>
+                                                        <th class="text-end">Porcentaje</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${categorias.map(c => {
+                                                        const porcentaje = c.porcentaje == null
+                                                            ? (suma ? c.cantidad * 100 / suma : 0)
+                                                            : c.porcentaje;
+
+                                                        return `
+                                                            <tr>
+                                                                <td>${escapar(c.etiqueta)}</td>
+                                                                <td class="text-end">${c.cantidad}</td>
+                                                                <td class="text-end">
+                                                                    ${porcentaje.toFixed(1)}%
+                                                                </td>
+                                                            </tr>`;
+                                                    }).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    `
+                                    : ''
+                            }
+                        `
                         : '<p class="text-muted mb-0">Sin respuestas para esta pregunta.</p>'
-                    }
-                </div>
-            </div>`;
+                }
+            </div>
+        </div>`;
 
         if (categorias.length && window.Chart) {
             const canvas = columna.querySelector(`#${idCanvas}`);
@@ -186,7 +196,11 @@
             const grafico = new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: datosGrafico.map(c => c.etiqueta),
+                    labels: datosGrafico.map(c =>
+                    c.etiqueta.length > 45
+                        ? c.etiqueta.substring(0, 42) + '...'
+                        : c.etiqueta
+                ),
                     datasets: [{
                         label: 'Respuestas',
                         data: datosGrafico.map(c => c.cantidad),
@@ -203,6 +217,10 @@
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
+                                title: items => {
+                                    const item = datosGrafico[items[0].dataIndex];
+                                    return item.etiqueta;
+                                },
                                 label: contexto => {
                                     const item = datosGrafico[contexto.dataIndex];
                                     const pct = suma
@@ -290,7 +308,13 @@
     // que todavía no hemos confirmado en su respuesta JSON.
     function mostraralumno(datos, contenedor) {
         contenedor.innerHTML = '';
-
+        const etiquetasIndicadores = {
+            totalTitulados: 'Total de titulados',
+            aceptaron: 'Aceptaron participar en la Red de Alumnos',
+            conCorreo: 'Con correo electrónico',
+            conTelefono: 'Con teléfono registrado',
+            conLinkedin: 'Con LinkedIn registrado'
+        };
         if (datos == null || typeof datos !== 'object') {
             mensaje(contenedor, 'El endpoint alumno no devolvió datos válidos.', 'warning');
             return;
@@ -321,7 +345,9 @@
                 <div class="col-6 col-md-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
-                            <div class="small text-muted">${escapar(clave)}</div>
+                            <div class="small text-muted">
+                                ${escapar(etiquetasIndicadores[clave] || clave)}
+                            </div>
                             <div class="fs-4 fw-bold text-primary">
                                 ${escapar(valor ?? '—')}
                             </div>
