@@ -24,7 +24,13 @@
   const num = (v, d = 2) => v == null ? '—'
     : Number(v).toLocaleString('es-BO', { minimumFractionDigits: d, maximumFractionDigits: d });
   const fmtP = p => p == null ? '—' : (p < 0.0001 ? '< 0.0001' : p.toFixed(4));
-
+  function normalizarTexto(texto) {
+    return String(texto ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('es');
+  }
   async function api(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error((await res.text()) || `Error ${res.status}`);
@@ -121,8 +127,12 @@
     const g = await api(`/api/analisis/frecuencias?pregunta=${CFG.p.departamento}&agrupada=true${qs}`);
     const total = g.reduce((s, x) => s + x.total, 0);
     if (!total) return { html: '<div class="col-12"><div class="alert alert-warning mb-0">No hay respuestas con ese filtro.</div></div>' };
-    const cant = nombre => g.find(x => x.respuesta === nombre)?.total ?? 0;
-    const base = cant(CFG.grupoBase), ext = cant(CFG.grupoExtranjero), fuga = total - base;
+    const cant = nombre =>
+  g.find(x => normalizarTexto(x.respuesta) === normalizarTexto(nombre))?.total ?? 0;
+
+    const base = cant(CFG.grupoBase);
+    const ext = cant(CFG.grupoExtranjero);
+    const fuga = total - base;
     const pct = v => (100 * v / total).toFixed(1) + '%';
     const k = (titulo, valor, detalle, color) => `
       <div class="col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body text-center">
