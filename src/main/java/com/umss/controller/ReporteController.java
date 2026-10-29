@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.umss.util.CalculadoraEmprendimiento;
 import com.umss.model.AreaEmpleabilidad;
 import com.umss.model.AreaInteresPosgrado;
 import com.umss.model.ResultadoChi2;
@@ -20,6 +21,19 @@ public class ReporteController {
         } catch (Exception e) {
             e.printStackTrace();
             ctx.status(500).result("Error al generar reporte: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Resumen del reporte de emprendimiento calculado en el servidor
+     * (mismas fórmulas que usan el CSV, el Excel y el PDF).
+     */
+    public static void reporteEmprendimientoResumen(Context ctx) {
+        try {
+            ctx.json(CalculadoraEmprendimiento.resumen(EncuestaDAO.obtenerConteoEmprendimiento()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            ctx.status(500).result("Error al generar el resumen: " + e.getMessage());
         }
     }
 

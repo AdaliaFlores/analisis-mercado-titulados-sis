@@ -65,9 +65,23 @@ public class EncuestaController {
             ExcelImporterService service = new ExcelImporterService();
             ExcelImporterService.Resultado r = service.importar(file.content(), encuestaId, conn);
 
+            boolean soloDuplicados = r.encuestas == 0 && r.duplicadas > 0;
+            String mensaje = soloDuplicados
+                    ? "No se insertaron datos nuevos: " + r.duplicadas
+                      + " fila(s) ya existían en la base de datos (archivo duplicado)."
+                    : "Importación completada: " + r.mensaje();
+
             ctx.json(Map.of(
-                "status", "success",
-                "mensaje", "Se importaron exitosamente " + r.encuestas + " encuestas (encuesta " + encuestaId + ")."
+                "status", soloDuplicados ? "warning" : "success",
+                "mensaje", mensaje,
+                "encuestas", r.encuestas,
+                "respuestas", r.respuestas,
+                "duplicadas", r.duplicadas
+            ));
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).json(Map.of(
+                "status", "error",
+                "mensaje", e.getMessage()
             ));
         } catch (Exception e) {
             e.printStackTrace();

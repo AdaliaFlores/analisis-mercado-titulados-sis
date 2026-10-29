@@ -2,6 +2,7 @@ com\umss\controller\RespuestaController.class
 com\umss\model\FiltroEnvio$Condicion.class
 com\umss\model\AreaEmpleabilidad.class
 com\umss\dao\ExcelImporterService.class
+com\umss\util\CalculadoraEmprendimiento$Escala.class
 com\umss\model\ResultadoPromedio.class
 com\umss\model\IndicadorEscala.class
 com\umss\model\ResumenGrupo.class
@@ -11,11 +12,14 @@ com\umss\controller\AnalisisController.class
 com\umss\dao\ExcelImporterService$Resultado.class
 com\umss\controller\ReporteHu12Controller.class
 com\umss\model\ResultadoChi2.class
+com\umss\util\CalculadoraEmprendimiento.class
 com\umss\config\Database.class
 com\umss\model\Encuesta.class
 com\umss\controller\ReporteController.class
+com\umss\dao\ExcelImporterService$Emparejamiento.class
 com\umss\dao\EnvioDAO.class
 com\umss\dao\EncuestaDAO.class
+com\umss\util\CalculadoraEmprendimiento$Metricas.class
 com\umss\model\ResultadoChiCuadrado.class
 com\umss\dao\ReglasEdicion.class
 com\umss\model\RespuestaDetalle.class
