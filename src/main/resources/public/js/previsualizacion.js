@@ -29,7 +29,7 @@
     try {
       const encuestas = await getJson('/api/encuestas');
       select.innerHTML =
-        '<option value="">-- Selecciona una encuesta --</option>' +
+        '<option value="" disabled selected hidden> Selecciona una encuesta </option>' +
         encuestas.map(e => `<option value="${e.id}">${esc(e.titulo)} (${esc(e.destinatario)})</option>`).join('');
     } catch (e) {
       select.innerHTML = `<option value="">Error al cargar encuestas: ${esc(e.message)}</option>`;
