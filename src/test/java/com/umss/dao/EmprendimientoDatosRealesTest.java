@@ -1,18 +1,19 @@
 package com.umss.dao;
 
-import com.umss.model.ConteoRespuesta;
-import com.umss.util.CalculadoraEmprendimiento;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import com.umss.model.ConteoRespuesta;
+import com.umss.util.CalculadoraEmprendimiento;
 
 /**
  * Prueba de coherencia sobre los datos reales de la base de datos.

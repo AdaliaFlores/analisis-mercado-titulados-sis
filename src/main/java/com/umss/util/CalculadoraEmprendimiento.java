@@ -76,7 +76,6 @@ public final class CalculadoraEmprendimiento {
     }
 
     // cálculo
-
     public static Metricas metricas(List<ConteoRespuesta> filas) {
         List<ConteoRespuesta> datos = filas == null ? List.of() : filas;
 
@@ -86,7 +85,7 @@ public final class CalculadoraEmprendimiento {
         List<ConteoRespuesta> d33 = porPregunta(datos, P_SATISFACCION);
         List<ConteoRespuesta> d34 = porPregunta(datos, P_IMPORTANCIA);
 
-        int universo = suma(d30);                                   // t30
+        int universo = suma(d30);                                 
         long spinOff = totalSiContiene(d30, "spin");
         long startUp = totalSiContiene(d30, "start");
         long ideaPropia = totalSiContiene(d30, "idea propia");
