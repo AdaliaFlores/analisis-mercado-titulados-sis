@@ -4,6 +4,7 @@ import com.umss.dao.AnalisisDAO;
 import com.umss.dao.EncuestaDAO;
 import com.umss.dao.ReporteHu12DAO;
 import com.umss.model.*;
+import com.umss.util.CalculadoraEmprendimiento;
 import com.umss.util.PruebaChiCuadrado;
 import io.javalin.http.Context;
 import org.apache.poi.ss.usermodel.*;
@@ -875,100 +876,21 @@ public class ExportController {
     // Resumen de Ecosistema de Emprendimiento e Innovación (mismo que la interfaz)
     private static double pctDe(long g, long t) { return t == 0 ? 0 : (g * 100.0 / t); }
 
+    // La lógica vive en CalculadoraEmprendimiento para que interfaz, exportadores y pruebas
+    // compartan exactamente las mismas fórmulas (ver docs/emprendimiento-calculos.md).
     private static List<String> resumenEmprendimientoBullets(Map<Integer, List<ConteoRespuesta>> porPreg) {
-        List<String> out = new ArrayList<>();
-        List<ConteoRespuesta> d30 = porPreg.getOrDefault(30, new ArrayList<>());
-        long t30 = 0; for (ConteoRespuesta c : d30) t30 += c.getTotal();
-        long spin = 0, start = 0, idea = 0;
-        for (ConteoRespuesta c : d30) {
-            String r = c.getRespuesta() == null ? "" : c.getRespuesta().toLowerCase();
-            if (r.contains("spin")) spin = c.getTotal();
-            if (r.contains("start")) start = c.getTotal();
-            if (r.contains("idea propia")) idea = c.getTotal();
-        }
-        List<ConteoRespuesta> d31 = porPreg.getOrDefault(31, new ArrayList<>());
-        long t31 = 0; for (ConteoRespuesta c : d31) t31 += c.getTotal();
-        ConteoRespuesta top31 = null;
-        for (ConteoRespuesta c : d31) if (top31 == null || c.getTotal() > top31.getTotal()) top31 = c;
-
-        List<ConteoRespuesta> d32 = porPreg.getOrDefault(32, new ArrayList<>());
-        long t32 = 0, externo = 0;
-        for (ConteoRespuesta c : d32) {
-            t32 += c.getTotal();
-            String r = c.getRespuesta() == null ? "" : c.getRespuesta().trim().toLowerCase();
-            if (r.startsWith("si") || r.startsWith("sí")) externo += c.getTotal();
-        }
-        long propio = t32 - externo;
-
-        List<ConteoRespuesta> d33 = porPreg.getOrDefault(33, new ArrayList<>());
-        long t33 = 0, alta33 = 0;
-        double sum33 = 0;
-        for (ConteoRespuesta c : d33) {
-            t33 += c.getTotal();
-            int v = 0; try { v = Integer.parseInt(c.getRespuesta() == null ? "" : c.getRespuesta().trim()); } catch (Exception ignored) {}
-            sum33 += v * c.getTotal();
-            if (v >= 4) alta33 += c.getTotal();
-        }
-        double prom33 = t33 == 0 ? 0 : sum33 / t33;
-
-        List<ConteoRespuesta> d34 = porPreg.getOrDefault(34, new ArrayList<>());
-        long t34 = 0, alta34 = 0;
-        for (ConteoRespuesta c : d34) {
-            t34 += c.getTotal();
-            int v = 0; try { v = Integer.parseInt(c.getRespuesta() == null ? "" : c.getRespuesta().trim()); } catch (Exception ignored) {}
-            if (v >= 4) alta34 += c.getTotal();
-        }
-
-        if (t30 > 0) out.add("Universo analizado: " + t30 + " emprendimiento(s) registrados por los titulados.");
-        if (t30 > 0) {
-            StringBuilder sb = new StringBuilder("Origen: ");
-            if (spin > 0) sb.append("Spin Off ").append(DF2.format(pctDe(spin, t30))).append("% · ");
-            if (idea > 0) sb.append("Idea propia ").append(DF2.format(pctDe(idea, t30))).append("% · ");
-            if (start > 0) sb.append("StartUp ").append(DF2.format(pctDe(start, t30))).append("%");
-            String s = sb.toString().replaceAll(" · $", "");
-            sb = new StringBuilder(s);
-            sb.append(". ").append(spin >= start ? "Predomina la iniciativa derivada de proyectos universitarios (Spin Off)." : "Predomina la StartUp.");
-            out.add(sb.toString());
-        }
-        if (top31 != null) out.add("Tipo de entregable predominante: " + top31.getRespuesta() + " (" + top31.getTotal() + " de " + t31 + ", " + DF2.format(pctDe(top31.getTotal(), t31)) + "%).");
-        if (t32 > 0) out.add("Financiamiento externo: " + DF2.format(pctDe(externo, t32)) + "% accedió a financiamiento (inversores/banca) y " + DF2.format(pctDe(propio, t32)) + "% trabajó con recursos propios.");
-        if (t33 > 0) out.add("Satisfacción con el rendimiento: promedio " + DF2.format(prom33) + "/5; " + DF2.format(pctDe(alta33, t33)) + "% calificó con 4 o 5.");
-        if (t34 > 0) out.add("Importancia de la formación: " + DF2.format(pctDe(alta34, t34)) + "% la valoró con 4 o 5, lo que respalda el fortalecimiento de competencias emprendedoras.");
-        return out;
+        return CalculadoraEmprendimiento.bullets(aplanar(porPreg));
     }
 
     private static List<String> resumenEmprendimientoRecomendaciones(Map<Integer, List<ConteoRespuesta>> porPreg) {
-        List<String> out = new ArrayList<>();
-        List<ConteoRespuesta> d30 = porPreg.getOrDefault(30, new ArrayList<>());
-        boolean haySpin = false, hayStart = false;
-        for (ConteoRespuesta c : d30) {
-            String r = c.getRespuesta() == null ? "" : c.getRespuesta().toLowerCase();
-            if (r.contains("spin")) haySpin = true;
-            if (r.contains("start")) hayStart = true;
-        }
-        List<ConteoRespuesta> d32 = porPreg.getOrDefault(32, new ArrayList<>());
-        long t32 = 0, externo = 0;
-        for (ConteoRespuesta c : d32) {
-            t32 += c.getTotal();
-            String r = c.getRespuesta() == null ? "" : c.getRespuesta().trim().toLowerCase();
-            if (r.startsWith("si") || r.startsWith("sí")) externo += c.getTotal();
-        }
-        List<ConteoRespuesta> d33 = porPreg.getOrDefault(33, new ArrayList<>());
-        long t33 = 0, alta33 = 0;
-        for (ConteoRespuesta c : d33) {
-            t33 += c.getTotal();
-            int v = 0; try { v = Integer.parseInt(c.getRespuesta() == null ? "" : c.getRespuesta().trim()); } catch (Exception ignored) {}
-            if (v >= 4) alta33 += c.getTotal();
-        }
-        boolean hay34 = !porPreg.getOrDefault(34, new ArrayList<>()).isEmpty();
+        return CalculadoraEmprendimiento.recomendaciones(aplanar(porPreg));
+    }
 
-        if (t32 > 0 && (t32 - externo) > externo) {
-            out.add("Ampliar el acceso a fuentes de financiamiento externo (inversores ángeles, fondos y banca) ya que la mayoría depende de recursos propios.");
+    private static List<ConteoRespuesta> aplanar(Map<Integer, List<ConteoRespuesta>> porPreg) {
+        List<ConteoRespuesta> out = new ArrayList<>();
+        for (List<ConteoRespuesta> lista : porPreg.values()) {
+            out.addAll(lista);
         }
-        if (haySpin) out.add("Consolidar la vinculación universidad–emprendimiento para escalar los Spin Off surgidos de proyectos de la carrera.");
-        if (hayStart) out.add("Reforzar el acompañamiento (mentoría e incubación) a las StartUps en etapas tempranas.");
-        if (t33 > 0 && alta33 * 2 < t33) out.add("Atender los casos de baja satisfacción con el rendimiento mediante seguimiento individualizado.");
-        if (hay34) out.add("Incorporar formación práctica en emprendimiento e innovación en el plan de estudios.");
         return out;
     }
 

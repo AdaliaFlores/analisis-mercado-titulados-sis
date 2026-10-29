@@ -139,7 +139,7 @@
             </div>
             <!-- Sección para importar datos dentro de dashboard.html -->
             <div class="card p-4 shadow-sm mb-4">
-                <h5 class="card-title">Importar Encuestas desde Excel</h5>
+                <h5 class="card-title">Importar Encuestas de titulados</h5>
                 <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de los titulados.</p>
                 
                 <form id="formImportarExcel" class="row g-3 align-items-center">
@@ -148,19 +148,17 @@
                     </div>
                     <div class="col-auto">
                         <button type="submit" id="btnSubirExcel" class="btn btn-primary">
-                            Subir e Importar
+                            Subir e Importar Titulados
                         </button>
                     </div>
                 </form>
-                
-                <!-- Mensaje de respuesta visual para el usuario -->
                 <div id="mensajeImportacion" class="mt-3" style="display: none;"></div>
             </div>
+
              <!-- Sección para importar datos de empleadores en dashboard.html -->
             <div class="card p-4 shadow-sm mb-4">
                 <h5 class="card-title">Importar Encuestas de Empleadores</h5>
-                <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de la encuesta a empleadores.</p>
-                
+                <p class="card-text text-muted">Seleccione el archivo .xlsx con las respuestas de los empleadores.</p>
                 <form id="formImportarEmpleadores" class="row g-3 align-items-center">
                     <div class="col-auto">
                         <input type="file" id="inputExcelEmpleadores" class="form-control" accept=".xlsx, .xls" required>
@@ -171,16 +169,7 @@
                         </button>
                     </div>
                 </form>
-                
                 <div id="mensajeImportacionEmpleadores" class="mt-3" style="display: none;"></div>
-            </div>
-        </div>
-
-        <!-- ÁREA DONDE TUS COMPAÑEROS CONSTRUIRÁN SUS GRÁFICOS / TABLAS -->
-        <div class="card shadow-sm border-0 p-4">
-            <h5 class="fw-bold mb-3">Resumen General de Respuestas</h5>
-            <div id="contenedorReportes">
-                <p class="text-muted">Seleccione un módulo arriba para cargar los datos estadísticos...</p>
             </div>
         </div>
     </div>
@@ -380,8 +369,8 @@
                             <option value="desempleo">Desempleo y Barreras (Matrices)</option>
                             <option value="formacion">Formación continua y Financiamiento (Áreas, Niveles, Matriz, χ²)</option>
                             <option value="empleabilidad">Empleabilidad y Ofertas con poca demanda (Empleabilidad + Razones, Asignaturas)</option>
-                            <option value="ubicacion">Pertinencia, Geografía y Fuga de Talentos (HU11: KPIs, Promedios, χ²)</option>
-                            <option value="hu12">Demanda Empresarial y Red Alumno (HU12: Frecuencias + Consentimiento)</option>
+                            <option value="ubicacion">Pertinencia, Geografía y Fuga de Talentos (KPIs, Promedios, χ²)</option>
+                            <option value="hu12">Demanda Empresarial y Red Alumno (Frecuencias + Consentimiento)</option>
                             <option value="cruce">Cruce de Variables (Matriz de Frecuencia Cruzada)</option>
                         </select>
                     </div>

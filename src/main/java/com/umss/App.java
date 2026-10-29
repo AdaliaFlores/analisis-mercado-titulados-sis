@@ -23,6 +23,7 @@ public class App {
         app.get("/api/encuestas/{id}/envios", EnvioController::listarEnvios);
         app.get("/api/envios/{envioId}", EnvioController::obtenerDetalle);
         app.get("/api/reportes/emprendimiento", ReporteController::reporteEmprendimiento);
+        app.get("/api/reportes/emprendimiento/resumen", ReporteController::reporteEmprendimientoResumen);
         app.get("/api/reportes/cruce", ReporteController::reporteCruce);
         app.get("/api/reportes/desempleo", ReporteController::reporteDesempleo);
         app.get("/api/reportes/brechas", ReporteController::reporteBrechas);

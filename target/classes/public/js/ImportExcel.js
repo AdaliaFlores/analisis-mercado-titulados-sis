@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('inputExcel');
     const boton = document.getElementById('btnSubirExcel');
     const divMensaje = document.getElementById('mensajeImportacion');
-    if (form) subir(form, input, boton, divMensaje, '/api/import/excel', 'Subir e Importar');
+    if (form) subir(form, input, boton, divMensaje, '/api/import/excel', 'Subir e Importar Titulados');
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,9 +35,9 @@ function subir(form, input, boton, divMensaje, url, etiquetaBoton) {
             const response = await fetch(url, { method: 'POST', body: formData });
             const resultado = await response.json();
 
-            if (response.ok && resultado.status === 'success') {
-                mostrar(divMensaje, resultado.mensaje, 'success');
-                form.reset();
+            if (response.ok && (resultado.status === 'success' || resultado.status === 'warning')) {
+                mostrar(divMensaje, resultado.mensaje, resultado.status === 'warning' ? 'warning' : 'success');
+                if (resultado.status === 'success') form.reset();
             } else {
                 mostrar(divMensaje, resultado.mensaje || 'Ocurrió un error al procesar el archivo.', 'danger');
             }
