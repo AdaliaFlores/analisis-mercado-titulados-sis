@@ -10,7 +10,6 @@ import com.umss.controller.ReporteHu12Controller;
 import com.umss.controller.RespuestaController;
 
 import io.javalin.Javalin;
-import com.umss.controller.EnvioController;
 
 public class App {
 
@@ -103,6 +102,9 @@ public class App {
 
         app.post("/api/import/excel/empleadores",
             EncuestaController::importarExcelEmpleadores);
+        app.get("/api/reportes/emprendimiento/resumen",
+
+        ReporteController::reporteEmprendimientoResumen);
 
         // Iniciar servidor en el puerto proporcionado por Render
         app.start("0.0.0.0", port);
