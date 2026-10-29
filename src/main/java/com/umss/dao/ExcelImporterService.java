@@ -1,7 +1,6 @@
 package com.umss.dao;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellReference;
 
 import java.io.InputStream;
 import java.sql.Connection;
@@ -39,9 +38,6 @@ public class ExcelImporterService {
     /** Base de tiempo compartida para que cada encuestado tenga fecha_registro distinto. */
     private static volatile long ultimaBaseMillis = 0;
 
-    // =====================================================================
-    //  Resultado mínimo (sin listas ni reportes)
-    // =====================================================================
     public static class Resultado {
         public int encuestas;
         public int respuestas;
