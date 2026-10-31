@@ -1,0 +1,14 @@
+# Archivo de variables de entorno (Credenciales y datos sensibles)
+.env
+
+# Archivos de construcción y compilación de Maven (Carpetas pesadas)
+/target/
+
+# Configuraciones de entorno de VS Code e IDEs
+/.vscode/
+/.idea/
+*.iml
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
