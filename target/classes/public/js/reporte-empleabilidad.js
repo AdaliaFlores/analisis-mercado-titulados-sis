@@ -24,15 +24,12 @@
     cont.innerHTML = '';
 
     cont.insertAdjacentHTML('beforeend', `
-      <div class="col-12">
-        <div class="alert alert-light border small mb-0">
-          <strong class="text-primary">Análisis de empleabilidad y ofertas con poca demanda.</strong>
-          <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Áreas con mayor empleabilidad</span>
-          = (Demanda empleador + Interés de titulados) / y asignaturas de ventaja.
-          <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Oferta con poca demanda</span>
-          = causas críticas, asignaturas de poca utilidad y rubros sin contratación prevista.
-        </div>
-      </div>`);
+    <div class="col-12">
+      <div class="alert alert-light border small mb-0">
+        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Áreas con mayor empleabilidad</span>
+        = (Demanda empleador + Interés de titulados) / 2.
+      </div>
+    </div>`);
 
     renderEmpleabilidadBarras(cont, d.areasEmpleabilidad);
     renderPocaDemandaEjes(cont, d);
@@ -51,7 +48,8 @@
       <div class="col-12">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
-            <h6 class="fw-bold text-primary">Áreas con mayor empleabilidad (barras verticales)</h6>
+            <h6 class="fw-bold text-primary mb-1">Demanda de Empresas vs. Interés de Graduados</h6>
+              <p class="text-muted small mb-3">Mide la afinidad tecnológica y calcula el % global de empleabilidad ponderada.</p>
             <canvas id="graficoEmpleabilidad" height="160"></canvas>
             <div class="table-responsive mt-3">
               <table class="table table-sm table-bordered text-center align-middle mb-0">
@@ -104,7 +102,8 @@
       <div class="col-12 mt-2">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
-            <h6 class="fw-bold text-danger">Oferta con poca demanda · Vista en eje cartesiano</h6>
+            <h6 class="fw-bold text-danger mb-1">Diagnóstico de Barreras y Descarte Curricular</h6>
+                <p class="text-muted small mb-3">Resumen de materias obsoletas, motivos de desempleo y plazas congeladas.</p>
             <canvas id="graficoPocaDemanda" height="150"></canvas>
           </div>
         </div>
@@ -151,9 +150,9 @@
       data: {
         labels: labels,
         datasets: [
-          { label: 'Razones críticas (%)', data: datosCriticas, backgroundColor: '#dc3545' },
-          { label: 'Asignaturas poca utilidad (%)', data: datosAsign, backgroundColor: '#fd7e14' },
-          { label: 'Contratación con baja/limitada previsión (%)', data: datosSinContrat, backgroundColor: '#6c757d' }
+          { label: 'Motivos de Desempleo (%)', data: datosCriticas, backgroundColor: '#dc3545' },
+          { label: 'Materias Menos Útiles (%)', data: datosAsign, backgroundColor: '#fd7e14' },
+          { label: 'Plazas Congeladas (%)', data: datosSinContrat, backgroundColor: '#6c757d' }
         ]
       },
       options: {
@@ -170,7 +169,7 @@
       <div class="col-md-6 mt-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <h6 class="fw-bold text-danger">Razones críticas </h6>
+            <h6 class="fw-bold text-danger mb-1">Motivos Principales de Desempleo</h6>
             <div class="table-responsive">
               <table class="table table-sm table-bordered text-center align-middle mb-0">
                 <thead class="table-light"><tr><th class="text-start">Razón</th><th>Total</th><th>%</th></tr></thead>
@@ -187,7 +186,7 @@
       <div class="col-md-6 mt-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <h6 class="fw-bold text-danger">Asignaturas de poca utilidad · Top</h6>
+            <h6 class="fw-bold text-danger mb-1">Materias con Menor Impacto Laboral</h6>
             <div class="table-responsive">
               <table class="table table-sm table-bordered text-center align-middle mb-0">
                 <thead class="table-light"><tr><th class="text-start">Asignatura</th><th>Total</th><th>%</th></tr></thead>
@@ -204,7 +203,8 @@
       <div class="col-12 mt-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
-            <h6 class="fw-bold text-danger">Rubros / posibilidad de contratación (empleadores)</h6>
+            <h6 class="fw-bold text-primary mb-1">Perfil del Sector Empresarial y Oportunidades Laborales</h6>
+              <p class="text-muted small mb-3">Sectores donde operan las empresas y su disponibilidad de apertura de plazas.</p>
             <div class="row g-3">
               <div class="col-md-6">
                 <div class="small text-muted">Rubro principal </div>
