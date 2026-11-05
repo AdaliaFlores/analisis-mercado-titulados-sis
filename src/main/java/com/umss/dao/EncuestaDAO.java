@@ -200,12 +200,15 @@ public class EncuestaDAO {
         StringBuilder in = new StringBuilder();
         for (int i = 0; i < preguntas.length; i++) in.append(i == 0 ? "?" : ",?");
 
-        String sql = "SELECT pregunta_id, TRIM(respuesta) AS respuesta, COUNT(*) AS total, "
-                   + "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY pregunta_id), 1) AS porcentaje "
-                   + "FROM respuestas "
-                   + "WHERE pregunta_id IN (" + in + ") AND respuesta IS NOT NULL AND TRIM(respuesta) <> '' "
-                   + "GROUP BY pregunta_id, TRIM(respuesta) "
-                   + "ORDER BY pregunta_id, total DESC";
+        // CÓDIGO NUEVO (CORREGIDO):
+            String sql = "SELECT pregunta_id, "
+                    + "RTRIM(TRIM(respuesta), '.') AS respuesta, "
+                    + "COUNT(*) AS total, "
+                    + "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY pregunta_id), 1) AS porcentaje "
+                    + "FROM respuestas "
+                    + "WHERE pregunta_id IN (" + in + ") AND respuesta IS NOT NULL AND TRIM(respuesta) <> '' "
+                    + "GROUP BY pregunta_id, RTRIM(TRIM(respuesta), '.') "
+                    + "ORDER BY pregunta_id, total DESC";
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -484,13 +487,19 @@ public class EncuestaDAO {
     }
 
     /** Asignaturas del titulado que se corresponden con cada area del diccionario. */
-    private static final Map<String, String[]> ASIG_POR_AREA = new LinkedHashMap<>();
-    static {
-        ASIG_POR_AREA.put("IA / Machine Learning", new String[]{"Inteligencia Artificial"});
-        ASIG_POR_AREA.put("Base de Datos / SQL", new String[]{"Base de Datos"});
-        ASIG_POR_AREA.put("Redes", new String[]{"Redes de Computadora", "Tecnologia Redes Avanzadas"});
-        ASIG_POR_AREA.put("Gestion de Proyectos", new String[]{"Planificación de Proyectos y Gestión"});
-    }
+        private static final Map<String, String[]> ASIG_POR_AREA = new LinkedHashMap<>();
+        static {
+            ASIG_POR_AREA.put("IA / Machine Learning", new String[]{"Inteligencia Artificial"});
+            ASIG_POR_AREA.put("Base de Datos / SQL", new String[]{"Base de Datos", "Sistemas de Base de Datos"});
+            ASIG_POR_AREA.put("Redes", new String[]{"Redes de Computadora", "Tecnologia Redes Avanzadas"});
+            ASIG_POR_AREA.put("Gestion de Proyectos", new String[]{"Planificación de Proyectos y Gestión", "Gestion"});
+            ASIG_POR_AREA.put("Competencias blandas", new String[]{"Liderazgo", "Trabajo en equipo", "Comunicacion"});
+            ASIG_POR_AREA.put("Ciberseguridad", new String[]{"Seguridad", "Ciberseguridad", "Seguridad Informatica"});
+            ASIG_POR_AREA.put("Cloud / Nube", new String[]{"Cloud", "Nube", "Computacion en la Nube"});
+            ASIG_POR_AREA.put("DevOps / Git", new String[]{"DevOps", "Git", "Taller de Software"});
+            ASIG_POR_AREA.put("Big Data / Analitica", new String[]{"Big Data", "Data", "Analitica"});
+            ASIG_POR_AREA.put("Contenedores (Docker/K8s)", new String[]{"Docker", "Kubernetes", "Contenedores"});
+        }
 
     private static boolean mencionaAlguna(List<String> textos, String[] claves) {
         for (String t : textos) {
@@ -559,51 +568,53 @@ public class EncuestaDAO {
     }
 
     public static List<AreaEmpleabilidad> analisisEmpleabilidad() throws SQLException {
-        // Empleadores
-        Map<String, List<String>> porEmpleador = new LinkedHashMap<>();
-        String sqlE = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
-                    + "WHERE r.pregunta_id IN (59,60,61) AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
-        try (Connection conn = Database.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sqlE)) {
-            while (rs.next())
-                porEmpleador.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
-        }
-        int totalEmpleadores = porEmpleador.size();
-
-        Map<String, List<String>> porTitulado = new LinkedHashMap<>();
-        String sqlT = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
-                    + "WHERE r.pregunta_id = 42 AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
-        try (Connection conn = Database.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sqlT)) {
-            while (rs.next())
-                porTitulado.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
-        }
-        int totalTitulados = porTitulado.size();
-
-        List<AreaEmpleabilidad> lista = new ArrayList<>();
-        for (Map.Entry<String, String[]> area : DICCIONARIO.entrySet()) {
-            int obj = 0;
-            for (List<String> resp : porEmpleador.values())
-                if (mencionaAlguna(resp, area.getValue())) obj++;
-
-            int act = 0;
-            String[] asigs = ASIG_POR_AREA.get(area.getKey());
-            if (asigs != null) {
-                for (List<String> resp : porTitulado.values())
-                    if (tieneAsignatura(resp, asigs)) act++;
+            // 1. Obtener respuestas de Empleadores (Demanda Tecnológica)
+            Map<String, List<String>> porEmpleador = new LinkedHashMap<>();
+            String sqlE = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
+                        + "WHERE r.pregunta_id IN (59,60,61) AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
+            try (Connection conn = Database.getConnection();
+                Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery(sqlE)) {
+                while (rs.next())
+                    porEmpleador.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
             }
+            int totalEmpleadores = porEmpleador.isEmpty() ? 80 : porEmpleador.size();
 
-            double demanda = porcentaje(obj, totalEmpleadores);
-            double interes = porcentaje(act, totalTitulados);
-            if (demanda > 0 || interes > 0) {
-                lista.add(new AreaEmpleabilidad(area.getKey(), demanda, interes));
+            // 2. Obtener respuestas de Titulados (Pregunta 9 de Interés de Posgrado)
+            Map<String, List<String>> porTitulado = new LinkedHashMap<>();
+            String sqlT = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
+                        + "WHERE r.pregunta_id = 9 AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
+            try (Connection conn = Database.getConnection();
+                Statement st = conn.createStatement();
+                ResultSet rs = st.executeQuery(sqlT)) {
+                while (rs.next())
+                    porTitulado.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
             }
+            int totalTitulados = porTitulado.isEmpty() ? 148 : porTitulado.size();
+
+            // 3. Conteo directo de áreas sin usar el filtro de materias universitarias
+            List<AreaEmpleabilidad> lista = new ArrayList<>();
+            for (Map.Entry<String, String[]> area : DICCIONARIO.entrySet()) {
+                int obj = 0;
+                for (List<String> resp : porEmpleador.values()) {
+                    if (mencionaAlguna(resp, area.getValue())) obj++;
+                }
+
+                int act = 0;
+                for (List<String> resp : porTitulado.values()) {
+                    if (mencionaAlguna(resp, area.getValue())) act++;
+                }
+
+                double demanda = porcentaje(obj, totalEmpleadores);
+                double interes = porcentaje(act, totalTitulados);
+
+                if (demanda > 0 || interes > 0) {
+                    lista.add(new AreaEmpleabilidad(area.getKey(), demanda, interes));
+                }
+            }
+            lista.sort((a, b) -> Double.compare(b.getEmpleabilidad(), a.getEmpleabilidad()));
+            return lista;
         }
-        lista.sort((a, b) -> Double.compare(b.getEmpleabilidad(), a.getEmpleabilidad()));
-        return lista;
-    }
 
     // CHI-CUADRADO 
     private static double logGamma(double x) {
@@ -721,12 +732,12 @@ public class EncuestaDAO {
         return sumaTop2 >= 70.0;
     }
 
-        /** Tabla de contingencia: Nivel/Tipo de posgrado × Fuente de financiamiento.
-     *  Calcula Chi-cuadrado, gl, valor p e interpretación. */
+    /** Tabla de contingencia: Nivel/Tipo de posgrado × Fuente de financiamiento.
+     *  Calcula Chi-cuadrado, gl, valor p e interpretación con diagnóstico de la Regla de Cochran. */
     public static Map<String, Object> tablaFinanciamiento() throws SQLException {
         Map<String, Object> out = new LinkedHashMap<>();
 
-        // Pares (nivel, financiamiento) enlazados por envío (fallback)
+        // Pares (nivel, financiamiento) enlazados por envío
         String sql = "SELECT TRIM(a.respuesta) AS nivel, TRIM(b.respuesta) AS financiamiento "
                    + "FROM respuestas a JOIN respuestas b ON " + claveEnvio("b") + " = " + claveEnvio("a") + " "
                    + "WHERE a.pregunta_id = 4 AND b.pregunta_id = 6 "
@@ -762,7 +773,7 @@ public class EncuestaDAO {
             if (O.containsKey(key)) O.put(key, O.getOrDefault(key, 0) + 1);
         }
 
-        // Totales
+        // Totales marginales
         long[] R = new long[filas.size()];
         long[] C = new long[columnas.size()];
         long N = 0;
@@ -785,20 +796,30 @@ public class EncuestaDAO {
             }
         }
 
-        // Chi-cuadrado
+        // Cálculo de Chi-cuadrado y verificación de la Regla de Cochran
         double chi2 = 0.0;
+        int celdasEsperadasBajas = 0;
+        int totalCeldas = filas.size() * columnas.size();
         boolean tieneDatos = N >= 5 && filas.size() >= 2 && columnas.size() >= 2;
+
         if (tieneDatos) {
             for (int i = 0; i < filas.size(); i++) {
                 for (int j = 0; j < columnas.size(); j++) {
                     int v = O.get(filas.get(i) + "||" + columnas.get(j));
                     double Eij = ((double) R[i] * (double) C[j]) / (double) N;
+                    
+                    // Conteo de celdas esperadas < 5
+                    if (Eij < 5.0) {
+                        celdasEsperadasBajas++;
+                    }
+
                     if (Eij >= 1e-12) {
                         chi2 += ((double) v - Eij) * ((double) v - Eij) / Eij;
                     }
                 }
             }
         }
+
         int df = Math.max(0, (filas.size() - 1) * (columnas.size() - 1));
         double p = 1.0;
         if (tieneDatos && df >= 1) {
@@ -807,12 +828,22 @@ public class EncuestaDAO {
             p = 1.0;
         }
 
+        // Construcción de la interpretación con advertencia metodológica si no cumple Cochran
         ResultadoChi2 rchi = new ResultadoChi2();
         rchi.setChiCuadrado(Math.round(chi2 * 1000.0) / 1000.0);
         rchi.setGradosLibertad(df);
         rchi.setValorP(p);
         rchi.setIndependiente(p >= 0.05);
-        rchi.setInterpretacion(interpretarChi2(chi2, df, p));
+
+        String interpretacionBase = interpretarChi2(chi2, df, p);
+        
+        // Si más del 20% de las celdas tienen E_ij < 5, se añade la nota técnica
+        double pctBajas = totalCeldas > 0 ? ((double) celdasEsperadasBajas / totalCeldas) * 100.0 : 0.0;
+        if (pctBajas > 20.0) {
+            interpretacionBase += String.format(" [Nota metodológica: El %.1f%% de las celdas esperadas son < 5. Se sugiere tomar los resultados con reserva o agrupar categorías].", pctBajas);
+        }
+
+        rchi.setInterpretacion(interpretacionBase);
 
         LinkedHashMap<String, Integer> conteoFilas = new LinkedHashMap<>();
         for (int i = 0; i < filas.size(); i++) conteoFilas.put(filas.get(i), (int) R[i]);
