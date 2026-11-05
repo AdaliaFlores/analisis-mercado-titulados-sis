@@ -2,8 +2,7 @@
 .env
 
 # Archivos de construcción y compilación de Maven (Carpetas pesadas)
-/target/
-
+target/
 # Configuraciones de entorno de VS Code e IDEs
 /.vscode/
 /.idea/

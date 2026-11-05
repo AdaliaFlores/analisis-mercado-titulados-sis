@@ -9,10 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.umss.util.CalculadoraEmprendimiento;
-import com.umss.model.AreaEmpleabilidad;
 import com.umss.model.AreaInteresPosgrado;
-import com.umss.model.ResultadoChi2;
-
 public class ReporteController {
 
     public static void reporteEmprendimiento(Context ctx) {
