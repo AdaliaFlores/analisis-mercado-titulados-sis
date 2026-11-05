@@ -732,12 +732,12 @@ public class EncuestaDAO {
         return sumaTop2 >= 70.0;
     }
 
-        /** Tabla de contingencia: Nivel/Tipo de posgrado × Fuente de financiamiento.
-     *  Calcula Chi-cuadrado, gl, valor p e interpretación. */
+    /** Tabla de contingencia: Nivel/Tipo de posgrado × Fuente de financiamiento.
+     *  Calcula Chi-cuadrado, gl, valor p e interpretación con diagnóstico de la Regla de Cochran. */
     public static Map<String, Object> tablaFinanciamiento() throws SQLException {
         Map<String, Object> out = new LinkedHashMap<>();
 
-        // Pares (nivel, financiamiento) enlazados por envío (fallback)
+        // Pares (nivel, financiamiento) enlazados por envío
         String sql = "SELECT TRIM(a.respuesta) AS nivel, TRIM(b.respuesta) AS financiamiento "
                    + "FROM respuestas a JOIN respuestas b ON " + claveEnvio("b") + " = " + claveEnvio("a") + " "
                    + "WHERE a.pregunta_id = 4 AND b.pregunta_id = 6 "
@@ -773,7 +773,7 @@ public class EncuestaDAO {
             if (O.containsKey(key)) O.put(key, O.getOrDefault(key, 0) + 1);
         }
 
-        // Totales
+        // Totales marginales
         long[] R = new long[filas.size()];
         long[] C = new long[columnas.size()];
         long N = 0;
@@ -796,20 +796,30 @@ public class EncuestaDAO {
             }
         }
 
-        // Chi-cuadrado
+        // Cálculo de Chi-cuadrado y verificación de la Regla de Cochran
         double chi2 = 0.0;
+        int celdasEsperadasBajas = 0;
+        int totalCeldas = filas.size() * columnas.size();
         boolean tieneDatos = N >= 5 && filas.size() >= 2 && columnas.size() >= 2;
+
         if (tieneDatos) {
             for (int i = 0; i < filas.size(); i++) {
                 for (int j = 0; j < columnas.size(); j++) {
                     int v = O.get(filas.get(i) + "||" + columnas.get(j));
                     double Eij = ((double) R[i] * (double) C[j]) / (double) N;
+                    
+                    // Conteo de celdas esperadas < 5
+                    if (Eij < 5.0) {
+                        celdasEsperadasBajas++;
+                    }
+
                     if (Eij >= 1e-12) {
                         chi2 += ((double) v - Eij) * ((double) v - Eij) / Eij;
                     }
                 }
             }
         }
+
         int df = Math.max(0, (filas.size() - 1) * (columnas.size() - 1));
         double p = 1.0;
         if (tieneDatos && df >= 1) {
@@ -818,12 +828,22 @@ public class EncuestaDAO {
             p = 1.0;
         }
 
+        // Construcción de la interpretación con advertencia metodológica si no cumple Cochran
         ResultadoChi2 rchi = new ResultadoChi2();
         rchi.setChiCuadrado(Math.round(chi2 * 1000.0) / 1000.0);
         rchi.setGradosLibertad(df);
         rchi.setValorP(p);
         rchi.setIndependiente(p >= 0.05);
-        rchi.setInterpretacion(interpretarChi2(chi2, df, p));
+
+        String interpretacionBase = interpretarChi2(chi2, df, p);
+        
+        // Si más del 20% de las celdas tienen E_ij < 5, se añade la nota técnica
+        double pctBajas = totalCeldas > 0 ? ((double) celdasEsperadasBajas / totalCeldas) * 100.0 : 0.0;
+        if (pctBajas > 20.0) {
+            interpretacionBase += String.format(" [Nota metodológica: El %.1f%% de las celdas esperadas son < 5. Se sugiere tomar los resultados con reserva o agrupar categorías].", pctBajas);
+        }
+
+        rchi.setInterpretacion(interpretacionBase);
 
         LinkedHashMap<String, Integer> conteoFilas = new LinkedHashMap<>();
         for (int i = 0; i < filas.size(); i++) conteoFilas.put(filas.get(i), (int) R[i]);

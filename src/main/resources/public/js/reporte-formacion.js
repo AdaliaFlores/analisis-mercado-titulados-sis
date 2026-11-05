@@ -28,7 +28,7 @@
           <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Formación continua</span>
           = áreas de interés de posgrado y nivel de formación deseado.
           <span class="badge bg-secondary-subtle text-dark border border-secondary-subtle">Financiamiento</span>
-          = matriz de contingencia Nivel × Fuente de financiamiento + diagnóstico χ² (df, p-valor).
+          = matriz de contingencia Nivel × Fuente de financiamiento + diagnóstico χ² (gl, p-valor).
         </div>
       </div>`);
 
@@ -63,7 +63,7 @@
           <div class="card-body">
             <h6 class="fw-bold text-info">Áreas de interés o especialidad de posgrado (frecuencias y porcentajes)</h6>
             <canvas id="graficoAreasInteres" height="200"></canvas>
-                        <div class="small text-muted mt-2">Áreas de interés declaradas por el titulado . n_i = número de titulados que seleccionaron el área. % = f_i = (n_i/N) times100.</div>
+            <div class="small text-muted mt-2">Áreas de interés declaradas por el titulado. nᵢ = número de titulados que seleccionaron el área. % = fᵢ = (nᵢ / N) × 100.</div>
           </div>
         </div>
       </div>`);
@@ -76,7 +76,7 @@
             <h6 class="fw-bold text-info">Tabla de frecuencias · Áreas de interés</h6>
             <div class="table-responsive">
               <table class="table table-sm table-bordered text-center align-middle mb-0">
-                <thead class="table-light"><tr><th class="text-start">Área de interés</th><th>$n_i$</th><th>%</th></tr></thead>
+                <thead class="table-light"><tr><th class="text-start">Área de interés</th><th>nᵢ</th><th>%</th></tr></thead>
                 <tbody>
                   ${areas.map(a => `
                     <tr><td class="text-start">${escapar(a.area)}</td><td>${a.n}</td><td>${a.porcentaje}%</td></tr>
@@ -94,7 +94,7 @@
         data: {
           labels: areas.map(a => a.area),
           datasets: [
-            { label: 'Frecuencia $n_i$', data: areas.map(a => a.n), backgroundColor: '#0dcaf099' },
+            { label: 'Frecuencia nᵢ', data: areas.map(a => a.n), backgroundColor: '#0dcaf099' },
             { label: 'Porcentaje %', data: areas.map(a => a.porcentaje), backgroundColor: '#0d6efd' }
           ]
         },
@@ -192,19 +192,18 @@
       <div class="col-12 mt-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
-            <h6 class="fw-bold text-secondary">Diagnóstico estadístico · Chi-cuadrado (chi^2)</h6>
+            <h6 class="fw-bold text-secondary">Diagnóstico estadístico · Chi-cuadrado (χ²)</h6>
             <div class="row g-3 mt-1">
               <div class="col-md-3">
                 <div class="border rounded p-2 h-100">
-                  <div class="small text-muted"> chi^2 calculado</div>
+                  <div class="small text-muted">χ² calculado</div>
                   <div class="fs-4 fw-bold">${Number(chi2.chiCuadrado || 0).toFixed(3)}</div>
                 </div>
               </div>
               <div class="col-md-3">
                 <div class="border rounded p-2 h-100">
-                  <div class="small text-muted">Grados de libertad (df)</div>
+                  <div class="small text-muted">Grados de libertad (gl)</div>
                   <div class="fs-4 fw-bold">${chi2.gradosLibertad ?? 0}</div>
-                  <!-- <div class="small text-muted">df = (filas-1)(cols-1)</div> -->
                 </div>
               </div>
               <div class="col-md-3">
