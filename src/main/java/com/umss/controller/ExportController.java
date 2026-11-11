@@ -9,7 +9,8 @@ import com.umss.util.PruebaChiCuadrado;
 import io.javalin.http.Context;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xddf.usermodel.chart.*;
+import org.apache.poi.xssf.usermodel.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -17,10 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.Base64;
 
-import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
-import org.apache.poi.xssf.usermodel.XSSFDrawing;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtils;
 import org.jfree.chart.JFreeChart;
@@ -98,6 +96,89 @@ public class ExportController {
         return renderPng(chart, 720, 420);
     }
 
+    /**
+     * Inserta un gráfico de barras nativo de Excel vinculado a un rango de celdas.
+     */
+    private static void crearGraficoBarrasNativo(
+            Sheet sh, 
+            String titulo, 
+            int colCategorias, int colValores, 
+            int filaInicio, int filaFin, 
+            int colUbicacion, int filaUbicacion, int anchoCols, int altoFilas) {
+
+        XSSFSheet xssfSheet = (XSSFSheet) sh;
+        XSSFDrawing drawing = xssfSheet.createDrawingPatriarch();
+
+        XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0, 
+                colUbicacion, filaUbicacion, colUbicacion + anchoCols, filaUbicacion + altoFilas);
+
+        XSSFChart chart = drawing.createChart(anchor);
+        chart.setTitleText(titulo);
+        chart.setTitleOverlay(false);
+
+        XDDFChartLegend legend = chart.getOrAddLegend();
+        legend.setPosition(LegendPosition.TOP_RIGHT);
+
+        XDDFCategoryAxis bottomAxis = chart.createCategoryAxis(AxisPosition.BOTTOM);
+        bottomAxis.setTitle("Categoría");
+        XDDFValueAxis leftAxis = chart.createValueAxis(AxisPosition.LEFT);
+        leftAxis.setTitle("Valor");
+        leftAxis.setCrossBetween(AxisCrossBetween.BETWEEN);
+        XDDFDataSource<String> xs = XDDFDataSourcesFactory.fromStringCellRange(
+                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colCategorias, colCategorias));
+        
+        XDDFNumericalDataSource<Double> ys = XDDFDataSourcesFactory.fromNumericCellRange(
+                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colValores, colValores));
+
+        XDDFBarChartData data = (XDDFBarChartData) chart.createData(ChartTypes.BAR, bottomAxis, leftAxis);
+        data.setBarDirection(BarDirection.COL);
+        
+        XDDFBarChartData.Series series = (XDDFBarChartData.Series) data.addSeries(xs, ys);
+        series.setTitle("Total", null);
+        
+        chart.plot(data);
+    }
+
+    /**
+     * Inserta un gráfico de pastel nativo de Excel (Pie Chart) vinculado a un rango de celdas.
+     */
+    private static void crearGraficoPastelNativo(
+            Sheet sh, 
+            String titulo, 
+            int colCategorias, int colValores, 
+            int filaInicio, int filaFin, 
+            int colUbicacion, int filaUbicacion, int anchoCols, int altoFilas) {
+
+        XSSFSheet xssfSheet = (XSSFSheet) sh;
+        XSSFDrawing drawing = xssfSheet.createDrawingPatriarch();
+
+        XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0, 
+                colUbicacion, filaUbicacion, colUbicacion + anchoCols, filaUbicacion + altoFilas);
+
+        XSSFChart chart = drawing.createChart(anchor);
+        chart.setTitleText(titulo);
+        chart.setTitleOverlay(false);
+
+        // Leyenda a la derecha
+        XDDFChartLegend legend = chart.getOrAddLegend();
+        legend.setPosition(LegendPosition.RIGHT);
+
+        // Rango de datos (Los gráficos de pastel no requieren declarar ejes Category/Value Axis)
+        XDDFDataSource<String> xs = XDDFDataSourcesFactory.fromStringCellRange(
+                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colCategorias, colCategorias));
+        
+        XDDFNumericalDataSource<Double> ys = XDDFDataSourcesFactory.fromNumericCellRange(
+                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colValores, colValores));
+
+        XDDFPieChartData data = (XDDFPieChartData) chart.createData(ChartTypes.PIE, null, null);
+        data.setVaryColors(true); // Asigna colores variados a cada tajada
+        
+        XDDFPieChartData.Series series = (XDDFPieChartData.Series) data.addSeries(xs, ys);
+        series.setTitle(titulo, null);
+        
+        chart.plot(data);
+    }
+
     /** Gráfico de radar (telaraña) para el análisis de brechas. */
     private static byte[] chartRadar(String titulo, List<String> cats, List<String> seriesNames, List<List<Double>> seriesVals) {
         DefaultCategoryDataset ds = new DefaultCategoryDataset();
@@ -142,22 +223,63 @@ public class ExportController {
     }
 
     //CSV
-    public static void exportCsv(Context ctx) {
-        String tipo = ctx.queryParam("tipo");
-        if (tipo == null) tipo = "brechas";
-        String filename = "reporte_" + tipo + "_" + System.currentTimeMillis() + ".csv";
-        String csv = reformatearCsv(generarCsv(tipo));
-        ctx.res().setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        ctx.res().setContentType("text/csv; charset=UTF-8");
-        ctx.res().setCharacterEncoding("UTF-8");
-        try {
-            // BOM para Excel
-            byte[] bom = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
-            ctx.result(new java.io.ByteArrayInputStream(concat(bom, csv.getBytes(StandardCharsets.UTF_8))));
-        } catch (Exception e) {
-            ctx.status(500).result("Error al generar CSV: " + e.getMessage());
+            // Reemplaza tu método exportCsv por este:
+        public static void exportCsv(Context ctx) {
+            String tipo = ctx.queryParam("tipo");
+            if (tipo == null) tipo = "brechas";
+            String filename = "reporte_" + tipo + "_" + System.currentTimeMillis() + ".csv";
+            
+            // 1. Generar CSV
+            String csvOriginal = reformatearCsv(generarCsv(tipo));
+            
+            // 2. CORRECCIÓN AUTOMÁTICA DE CORRUPCIÓN DE ENCODING (MOJIBAKE)
+            String csvCorregido = repararEncoding(csvOriginal);
+            
+            ctx.res().setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+            ctx.res().setContentType("text/csv; charset=UTF-8");
+            ctx.res().setCharacterEncoding("UTF-8");
+            try {
+                // BOM UTF-8 para Excel
+                byte[] bom = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+                ctx.result(new java.io.ByteArrayInputStream(concat(bom, csvCorregido.getBytes(StandardCharsets.UTF_8))));
+            } catch (Exception e) {
+                ctx.status(500).result("Error al generar CSV: " + e.getMessage());
+            }
         }
-    }
+
+// Agrega esta función auxiliar al final de la clase ExportController.java:
+        private static String repararEncoding(String texto) {
+            if (texto == null) return "";
+            return texto
+                .replace("Ã“", "Ó")
+                .replace("Ã³", "ó")
+                .replace("Ã\u0081", "Á")
+                .replace("Ã¡", "á")
+                .replace("Ã‰", "É")
+                .replace("Ã©", "é")
+                .replace("Ã\u008D", "Í")
+                .replace("Ã*", "Í")
+                .replace("Ã*", "í")
+                .replace("Ã­", "í")
+                .replace("Ãš", "Ú")
+                .replace("Ãº", "ú")
+                .replace("Ã‘", "Ñ")
+                .replace("Ã±", "ñ")
+                .replace("Ã", "Í") // Casos aislados como SÃ -> SÍ o hipÃ³tesis
+                .replace("Í³", "ó")
+                .replace("Í\u0081", "Á")
+                .replace("Í¡", "á")
+                .replace("Í‰", "É")
+                .replace("Í©", "é")
+                .replace("Í*", "Í")
+                .replace("Í­", "í")
+                .replace("Íš", "Ú")
+                .replace("Íº", "ú")
+                .replace("Í‘", "Ñ")
+                .replace("Í±", "ñ")
+                .replace("ïˆò", "²")
+                .replace("ï†²", "²");
+        }
 
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] c = new byte[a.length + b.length];
@@ -208,48 +330,15 @@ public class ExportController {
         try {
             switch (tipo) {
                 case "brechas" -> {
-                    // Radar de brechas
-                    sb.append("=== EVALUACIÓN DE BRECHAS - MATRIZ RADAR (DIMENSIÓN | OBJETIVO(%) | ACTUAL(%) | BRECHA(%)) ===\r\n");
-                    sb.append("DIMENSION,OBJETIVO(%),ACTUAL(%),BRECHA(%)\r\n");
+                        // Formato Tabular Limpio y Estándar (Sin títulos intermedios que rompan el parseo)
+                    sb.append("DIMENSION;OBJETIVO_PCT;ACTUAL_PCT;BRECHA_PCT\r\n");
                     List<DimensionRadar> radar = EncuestaDAO.radarBrechas();
                     for (DimensionRadar d : radar) {
-                        sb.append(csv(d.getDimension())).append(",").append(d.getObjetivo()).append(",").append(d.getActual()).append(",").append(d.getBrecha()).append("\r\n");
-                    }
-                    sb.append("\r\n");
-
-                    // Asignaturas ventaja 
-                    sb.append("=== ASIGNATURAS CON MAYOR VENTAJA PARA EL DESEMPEÑO (p42) ===\r\n");
-                    sb.append("ASIGNATURA,TOTAL,%_TITULADOS\r\n");
-                    List<ConteoRespuesta> asig42 = EncuestaDAO.asignaturasFrecuencia(42);
-                    for (ConteoRespuesta c : asig42) {
-                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(c.getPorcentaje())).append("\r\n");
-                    }
-                    sb.append("\r\n");
-                    sb.append("=== CRUCE: ASIGNATURAS DE VENTAJA (p42) × SITUACIÓN LABORAL ACTUAL (p14) ===\r\n");
-                    sb.append("ASIGNATURA,SITUACION_LABORAL,TOTAL\r\n");
-                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(42, 14)) {
-                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
-                    }
-                    sb.append("\r\n");
-
-                    // Asignaturas de poca utilidad
-                    List<ConteoRespuesta> asig44 = EncuestaDAO.asignaturasFrecuencia(44);
-                    sb.append("=== ASIGNATURAS DE POCA UTILIDAD PROFESIONAL (p44) ===\r\n");
-                    sb.append("ASIGNATURA,TOTAL,%_TITULADOS\r\n");
-                    for (ConteoRespuesta c : asig44) {
-                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(c.getPorcentaje())).append("\r\n");
-                    }
-                    sb.append("\r\n");
-                    sb.append("=== CRUCE: ASIGNATURAS DE POCA UTILIDAD (p44) × SITUACIÓN LABORAL ACTUAL (p14) ===\r\n");
-                    sb.append("ASIGNATURA,SITUACION_LABORAL,TOTAL\r\n");
-                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(44, 14)) {
-                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
-                    }
-                    sb.append("\r\n");
-                    sb.append("=== CRUCE: ASIGNATURAS DE POCA UTILIDAD (p44) × RAZÓN DE INACTIVIDAD LABORAL (p28) ===\r\n");
-                    sb.append("ASIGNATURA,RAZON_INACTIVIDAD,TOTAL\r\n");
-                    for (CeldaCruce cc : EncuestaDAO.cruceAsignaturaVariable(44, 28)) {
-                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
+                        // Estandarización de decimales con DF2 (evita mezcla de puntos y comas)
+                        sb.append(csv(d.getDimension())).append(";")
+                        .append(DF2.format(d.getObjetivo())).append(";")
+                        .append(DF2.format(d.getActual())).append(";")
+                        .append(DF2.format(d.getBrecha())).append("\r\n");
                     }
                 }
                 case "emprendimiento" -> {
@@ -300,7 +389,7 @@ public class ExportController {
                 case "formacion" -> {
                     sb.append("=== FORMACIÓN CONTINUA Y MECANISMOS DE FINANCIAMIENTO ===\r\n\r\n");
 
-                    // Áreas interés 
+                    // Áreas de interés (p9)
                     sb.append("=== ÁREAS DE INTERÉS DE POSGRADO (p9) - DECLARADAS POR EL TITULADO ===\r\n");
                     sb.append("AREA_DE_INTERES,n,f_i(%)\r\n");
                     List<AreaInteresPosgrado> areasP9 = EncuestaDAO.areasInteresPosgrado();
@@ -313,7 +402,8 @@ public class ExportController {
                         long top1 = areasP9.isEmpty() ? 0 : areasP9.get(0).getN();
                         long top2 = areasP9.size() < 2 ? top1 : top1 + areasP9.get(1).getN();
                         double pctTop2 = (top2 * 100.0 / (double) Np9);
-                        sb.append("\r\nALERTA DE CONCENTRACIÓN CRÍTICA DE MERCADO: Suma Top 2 = ").append(top2).append("/").append(Np9).append(" (").append(DF2.format(pctTop2)).append("%) | Umbral ≥ 70%").append(pctTop2 >= 70.0 ? " → SÍ (CRÍTICA)" : " → NO").append("\r\n\r\n");
+                        // FIX: Se usan operadores estándar >= y -> para evitar distorsión en Excel
+                        sb.append("\r\nALERTA DE CONCENTRACIÓN CRÍTICA DE MERCADO: Suma Top 2 = ").append(top2).append("/").append(Np9).append(" (").append(DF2.format(pctTop2)).append("%) | Umbral >= 70%").append(pctTop2 >= 70.0 ? " -> SÍ (CRÍTICA)" : " -> NO").append("\r\n\r\n");
                     }
 
                     sb.append("=== NIVEL/TIPO DE POSGRADO DESEADO (p4) - TITULADOS ===\r\n");
@@ -331,7 +421,7 @@ public class ExportController {
                     @SuppressWarnings("unchecked") List<String> filasF = (List<String>) fin.get("filas");
                     @SuppressWarnings("unchecked") List<String> colsF = (List<String>) fin.get("columnas");
                     @SuppressWarnings("unchecked") List<CeldaCruce> celdasF = (List<CeldaCruce>) fin.get("celdas");
-                    sb.append("=== MATRIZ DE CONTINGENCIA: NIVEL DE POSGRADO DESEADO (p4) × FUENTE DE FINANCIAMIENTO (p6) ===\r\n");
+                    sb.append("=== MATRIZ DE CONTINGENCIA: NIVEL DE POSGRADO DESEADO (p4) x FUENTE DE FINANCIAMIENTO (p6) ===\r\n");
                     sb.append("NIVEL/FUENTE_DE_FINANCIAMIENTO");
                     for (String c : colsF) sb.append(",").append(csv(c));
                     sb.append(",TOTAL_FILA\r\n");
@@ -352,15 +442,15 @@ public class ExportController {
                     for (String c : colsF) sb.append(",").append(tcMap.getOrDefault(c, 0));
                     sb.append(",").append(NTotF).append("\r\n\r\n");
 
-                    // Chi2
+                    // FIX: Chi-cuadrado y p-valor en texto plano estándar
                     ResultadoChi2 rchi = (ResultadoChi2) fin.get("chi2");
                     Boolean tieneDatosF = (Boolean) fin.get("tieneDatos");
                     if (rchi != null) {
-                        sb.append("=== DIAGNÓSTICO ESTADÍSTICO (χ² de Independencia) ===\r\n");
-                        sb.append("χ²,").append(rchi.getChiCuadrado()).append("\r\n");
+                        sb.append("=== DIAGNÓSTICO ESTADÍSTICO (Chi-cuadrado de Independencia) ===\r\n");
+                        sb.append("Chi-cuadrado,").append(rchi.getChiCuadrado()).append("\r\n");
                         sb.append("gl (grados de libertad),").append(rchi.getGradosLibertad()).append("\r\n");
                         sb.append("p-valor,").append(rchi.getValorP()).append("\r\n");
-                        sb.append("Independiente (H0),").append(rchi.isIndependiente() ? "SÍ (p ≥ 0.05)" : "NO (p < 0.05)").append("\r\n");
+                        sb.append("Independiente (H0),").append(rchi.isIndependiente() ? "SÍ (p >= 0.05)" : "NO (p < 0.05)").append("\r\n");
                         sb.append("Interpretación,").append(csv(rchi.getInterpretacion())).append("\r\n");
                         sb.append("Datos suficientes para el test,").append((tieneDatosF != null && tieneDatosF) ? "SÍ" : "NO").append("\r\n");
                     }
@@ -473,7 +563,7 @@ public class ExportController {
                     appendChiMatrizCsv(sb, c3);
                 }
                 case "hu12" -> {
-                    sb.append("=== DEMANDA EMPRESARIAL Y RED ALUMNO (HU12) ===\r\n\r\n");
+                    sb.append("=== DEMANDA EMPRESARIAL Y RED ALUMNO  ===\r\n\r\n");
                     sb.append("=== GRUPO 1: DEMANDA EMPRESARIAL (encuesta 2) ===\r\n\r\n");
                     for (int pid : HU12_DEMANDA) appendHu12Csv(sb, pid);
                     sb.append("=== GRUPO 2: PERCEPCIÓN DE LA FORMACIÓN (encuesta 2) ===\r\n\r\n");
@@ -493,7 +583,7 @@ public class ExportController {
                 default -> sb.append("TIPO DE REPORTE NO SOPORTADO: ").append(csv(tipo)).append("\r\n");
             }
         } catch (Exception e) {
-            sb.append("\r\nERROR AL EXPORTAR: ").append(csv(e.getMessage())).append("\r\n");
+           sb.append("ERROR AL EXPORTAR: ").append(csv(e.getMessage())).append("\r\n");
         }
         return sb.toString();
     }
@@ -513,7 +603,9 @@ public class ExportController {
 
     private static String csv(String s) {
         if (s == null) return "\"\"";
-        String t = s.replace("\"", "\"\"");
+        // Limpia espacios no romponibles (\u00A0) antes de escapar las comillas
+        String limpio = s.replace('\u00A0', ' ').trim();
+        String t = limpio.replace("\"", "\"\"");
         return "\"" + t + "\"";
     }
 
@@ -780,14 +872,15 @@ public class ExportController {
 
     /** Tabla χ² para PDF: estadísticos + matriz observada/esperada/contribución + totales. */
     private static void htmlChi(StringBuilder sb, ResultadoChiCuadrado r) {
-        sb.append("<table><tr><th>MODO</th><th>N</th><th>GL</th><th class='num'>χ²</th><th class='num'>VALOR CRÍTICO</th><th class='num'>VALOR P</th><th>RECHAZA INDEPENDENCIA</th></tr>");
+        // CAMBIO: Se cambió "χ²" por "CHI2" para evitar que el PDF renderice "#²"
+        sb.append("<table><tr><th>MODO</th><th>N</th><th>GL</th><th class='num'>CHI2</th><th class='num'>VALOR CRÍTICO</th><th class='num'>VALOR P</th><th>RECHAZA INDEPENDENCIA</th></tr>");
         sb.append("<tr><td>").append(esc(r.modoAplicado())).append("</td><td>").append(r.n())
-          .append("</td><td>").append(r.gradosLibertad())
-          .append("</td><td class='num'>").append(r.chiCuadrado() == null ? "no calculable" : DF3.format(r.chiCuadrado()))
-          .append("</td><td class='num'>").append(r.valorCritico() == null ? "no calculable" : DF3.format(r.valorCritico()))
-          .append("</td><td class='num'>").append(fmtPval(r.pValor()))
-          .append("</td><td>").append(r.rechazaIndependencia() == null ? "no calculable"
-                  : (r.rechazaIndependencia() ? "SÍ" : "NO")).append("</td></tr></table>");
+        .append("</td><td>").append(r.gradosLibertad())
+        .append("</td><td class='num'>").append(r.chiCuadrado() == null ? "no calculable" : DF3.format(r.chiCuadrado()))
+        .append("</td><td class='num'>").append(r.valorCritico() == null ? "no calculable" : DF3.format(r.valorCritico()))
+        .append("</td><td class='num'>").append(fmtPval(r.pValor()))
+        .append("</td><td>").append(r.rechazaIndependencia() == null ? "no calculable"
+                : (r.rechazaIndependencia() ? "SÍ" : "NO")).append("</td></tr></table>");
         for (String a : r.advertencias())
             sb.append("<div class='alert'><strong>Aviso:</strong> ").append(esc(a)).append("</div>");
         sb.append("<h4>Frecuencias observadas (O)</h4>");
@@ -813,24 +906,25 @@ public class ExportController {
         sb.append("<td class='num'>").append(r.n()).append("</td></tr></table>");
     }
 
-    /** Tabla de promedios por grupo para PDF. */
-    private static void htmlPromedio(StringBuilder sb, ResultadoPromedio r) {
-        sb.append("<table><tr><th>GRUPO</th><th class='num'>n</th><th class='num'>SUMA (Σ)</th><th class='num'>MEDIA</th><th class='num'>DESV. EST.</th><th>OBSERVACIÓN</th></tr>");
-        for (ResumenGrupo g : r.grupos()) {
-            sb.append("<tr").append(g.muestraSuficiente() ? "" : " style='background:#fff3cd'").append("><td>")
-              .append(esc(g.grupo())).append("</td><td class='num'>").append(g.n())
-              .append("</td><td class='num'>").append(DF2.format(g.suma()))
-              .append("</td><td class='num fw-bold'>").append(g.media() == null ? "—" : DF2.format(g.media()))
-              .append("</td><td class='num'>").append(g.desviacion() == null ? "—" : DF2.format(g.desviacion()))
-              .append("</td><td class='small'>").append(g.muestraSuficiente() ? "" : "n &lt; 5: poco confiable")
-              .append(g.sinCodificar() > 0 ? " · " + g.sinCodificar() + " sin valor asignado" : "")
-              .append("</td></tr>");
+            /** Tabla de promedios por grupo para PDF. */
+        private static void htmlPromedio(StringBuilder sb, ResultadoPromedio r) {
+            // CAMBIO: Se quitó el carácter griego Σ que generaba "SUMA (#)"
+            sb.append("<table><tr><th>GRUPO</th><th class='num'>n</th><th class='num'>SUMA</th><th class='num'>MEDIA</th><th class='num'>DESV. EST.</th><th>OBSERVACIÓN</th></tr>");
+            for (ResumenGrupo g : r.grupos()) {
+                sb.append("<tr").append(g.muestraSuficiente() ? "" : " style='background:#fff3cd'").append("><td>")
+                .append(esc(g.grupo())).append("</td><td class='num'>").append(g.n())
+                .append("</td><td class='num'>").append(DF2.format(g.suma()))
+                .append("</td><td class='num fw-bold'>").append(g.media() == null ? "—" : DF2.format(g.media()))
+                .append("</td><td class='num'>").append(g.desviacion() == null ? "—" : DF2.format(g.desviacion()))
+                .append("</td><td class='small'>").append(g.muestraSuficiente() ? "" : "n &lt; 5: poco confiable")
+                .append(g.sinCodificar() > 0 ? " · " + g.sinCodificar() + " sin valor assigned" : "")
+                .append("</td></tr>");
+            }
+            sb.append("<tr class='table-secondary fw-bold'><th>General</th><td class='num'>").append(r.n())
+            .append("</td><td class='num'>").append(DF2.format(r.suma()))
+            .append("</td><td class='num'>").append(r.mediaGlobal() == null ? "—" : DF2.format(r.mediaGlobal()))
+            .append("</td><td></td><td></td></tr></table>");
         }
-        sb.append("<tr class='table-secondary fw-bold'><th>General</th><td class='num'>").append(r.n())
-          .append("</td><td class='num'>").append(DF2.format(r.suma()))
-          .append("</td><td class='num'>").append(r.mediaGlobal() == null ? "—" : DF2.format(r.mediaGlobal()))
-          .append("</td><td></td><td></td></tr></table>");
-    }
 
     /** Tabla de una pregunta HU12 para PDF (encuesta 2). */
     private static void htmlHu12(StringBuilder sb, int pid) throws Exception {
@@ -1297,152 +1391,229 @@ public class ExportController {
     private static List<ConteoRespuesta> list(List<ConteoRespuesta> l) { return l == null ? new ArrayList<>() : l; }
 
     private static void agregarGraficosExcel(Workbook wb, Sheet sh, String tipo) throws Exception {
-        final int COL = 8;          // columna I (deja libres las columnas de datos)
-        final int ANCHO_COLS = 6;   // columnas que abarca el gráfico
-        int row = 1;
+            final int COL = 8;          // columna I (deja libres las columnas de datos)
+            final int ANCHO_COLS = 6;   // columnas que abarca el gráfico
+            int row = 1;
 
-        switch (tipo) {
-            case "brechas" -> {
-                List<DimensionRadar> radar = EncuestaDAO.radarBrechas();
-                List<String> cats = new ArrayList<>();
-                List<Double> obj = new ArrayList<>();
-                List<Double> act = new ArrayList<>();
-                for (DimensionRadar d : radar) { cats.add(d.getDimension()); obj.add(d.getObjetivo()); act.add(d.getActual()); }
-                insertarImagen(wb, sh, chartRadar("Brechas: objetivo (empleador) vs actual (titulado)", cats, Arrays.asList("Objetivo", "Actual"), Arrays.asList(obj, act)), COL, row, COL + ANCHO_COLS, row + 25);
-                row += 26;
+            switch (tipo) {
+                case "brechas" -> {
+                    int inicioP42 = 22; // Fila 23 de Excel (Base de Datos)
+                    int finP42 = 30;    // Fila 31 de Excel (Básicas: Física, Cálculo...)
 
-                List<ConteoRespuesta> asig = list(EncuestaDAO.asignaturasFrecuencia(42));
-                if (asig.size() > 10) asig = asig.subList(0, 10);
-                insertarImagen(wb, sh, chartBar("Asignaturas de mayor ventaja (p42)", "Asignatura", "Frecuencia",
-                        asig.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        asig.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"),
-                        COL, row, COL + ANCHO_COLS, row + 23);
-                row += 24;
+                    crearGraficoBarrasNativo(sh, "Asignaturas de mayor ventaja (p42)", 
+                                            0, 1, 
+                                            inicioP42, finP42, 
+                                            COL, row, ANCHO_COLS, 22);
+                    row += 24;
 
-                List<ConteoRespuesta> asig44 = list(EncuestaDAO.asignaturasFrecuencia(44));
-                if (asig44.size() > 10) asig44 = asig44.subList(0, 10);
-                insertarImagen(wb, sh, chartBar("Asignaturas de poca utilidad (p44)", "Asignatura", "Frecuencia",
-                        asig44.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        asig44.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"),
-                        COL, row, COL + ANCHO_COLS, row + 23);
-            }
-            case "emprendimiento" -> {
-                List<ConteoRespuesta> filas = list(EncuestaDAO.obtenerConteoEmprendimiento());
-                Map<Integer, List<ConteoRespuesta>> porPreg = new LinkedHashMap<>();
-                for (ConteoRespuesta f : filas) porPreg.computeIfAbsent(f.getPreguntaId(), k -> new ArrayList<>()).add(f);
-                int[][] meta = { {30, 0}, {31, 0}, {32, 0}, {33, 1}, {34, 1} }; // 0=pie, 1=bar
-                String[] titulos = {
-                        "Origen del emprendimiento (p30)",
-                        "Tipo de entregable (p31)",
-                        "Financiamiento externo (p32)",
-                        "Satisfacción con el rendimiento (p33)",
-                        "Importancia de la formación (p34)"
-                };
-                for (int k = 0; k < 5; k++) {
-                    List<ConteoRespuesta> lista = list(porPreg.getOrDefault(new int[]{30,31,32,33,34}[k], new ArrayList<>()));
-                    List<String> c = lista.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList());
-                    List<Double> v = lista.stream().map(x -> (double) x.getTotal()).collect(java.util.stream.Collectors.toList());
-                    byte[] png = chartPie(titulos[k], c, v);
-                    insertarImagen(wb, sh, png, COL, row, COL + ANCHO_COLS, row + 22);
-                    row += 23;
+                    int inicioP44 = 62; // Fila 63 de Excel (Aplic. Interactivas para Televisión Digital)
+                    int finP44 = 72;    // Fila 73 de Excel (Programación Funcional)
+
+                    crearGraficoBarrasNativo(sh, "Asignaturas de poca utilidad (p44)", 
+                                            0, 1, 
+                                            inicioP44, finP44, 
+                                            COL, row, ANCHO_COLS, 22);
                 }
-                // comparativo
-                List<ConteoRespuesta> d30 = list(porPreg.getOrDefault(30, new ArrayList<>()));
-                double spin = 0, start = 0;
-                for (ConteoRespuesta cp : d30) {
-                    String r = cp.getRespuesta() == null ? "" : cp.getRespuesta().toLowerCase();
-                    if (r.contains("spin")) spin = cp.getTotal();
-                    if (r.contains("start")) start = cp.getTotal();
+                case "emprendimiento" -> {
+                    // 1. Gráfico Nativo: Origen del emprendimiento (p30) -> Filas 4 a 7 (índices 3 a 6)
+                    crearGraficoBarrasNativo(sh, "Origen del emprendimiento (p30)", 
+                                            0, 1, 
+                                            4, 7,  
+                                            COL, 3, ANCHO_COLS, 18);
+
+                    // 2. Gráfico Nativo: Tipo de entregable (p31) -> Filas 11 a 13 (índices 10 a 12)
+                    crearGraficoBarrasNativo(sh, "Tipo de entregable (p31)", 
+                                            0, 1, 
+                                            10, 12, 
+                                            COL, 23, ANCHO_COLS, 18);
+
+                    // 3. Gráfico Nativo: Financiamiento externo (p32) -> Filas 16 a 18 (índices 15 a 17)
+                    crearGraficoBarrasNativo(sh, "Financiamiento externo (p32)", 
+                                            0, 1, 
+                                            15, 17, 
+                                            COL, 43, ANCHO_COLS, 18);
+
+                    // 4. Gráfico Nativo: Satisfacción (p33) -> Filas 21 a 23 (índices 20 a 22)
+                    crearGraficoBarrasNativo(sh, "Satisfacción con el rendimiento (p33)", 
+                                            0, 1, 
+                                            20, 22, 
+                                            COL, 63, ANCHO_COLS, 18);
+
+                    // 5. Gráfico Nativo: Importancia (p34) -> Filas 26 a 28 (índices 25 a 27)
+                    crearGraficoBarrasNativo(sh, "Importancia de la formación (p34)", 
+                                            0, 1, 
+                                            25, 27, 
+                                            COL, 83, ANCHO_COLS, 18);
                 }
-                insertarImagen(wb, sh, chartBar("Comparativo: Spin-offs vs Startups (p30)", "Categoría", "Frecuencia",
-                        Arrays.asList("Spin Off", "StartUp"), Arrays.asList(spin, start), "Total"), COL, row, COL + ANCHO_COLS, row + 22);
-            }
-            case "desempleo" -> {
-                List<ConteoRespuesta> razones = list(EncuestaDAO.contarRespuestas(28));
-                insertarImagen(wb, sh, chartBar("Razones del desempleo (p28)", "Razón", "Frecuencia",
-                        razones.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        razones.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"), COL, row, COL + ANCHO_COLS, row + 24);
-                row += 25;
-                List<ConteoRespuesta> tiempos = list(EncuestaDAO.contarRespuestas(36));
-                insertarImagen(wb, sh, chartBar("Tiempo hasta el primer empleo (p36)", "Tiempo", "Frecuencia",
-                        tiempos.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        tiempos.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"), COL, row, COL + ANCHO_COLS, row + 24);
-            }
-            case "formacion" -> {
-                List<AreaInteresPosgrado> areas = EncuestaDAO.areasInteresPosgrado();
-                insertarImagen(wb, sh, chartBar("Áreas de interés de posgrado (p9)", "Área", "n",
-                        areas.stream().map(AreaInteresPosgrado::getArea).collect(java.util.stream.Collectors.toList()),
-                        areas.stream().map(a -> (double) a.getN()).collect(java.util.stream.Collectors.toList()), "n"), COL, row, COL + ANCHO_COLS, row + 24);
-                row += 25;
+                case "desempleo" -> {
+                    // 1. Escribir tabla resumen de Razones del Desempleo (p28) en la hoja para vincular el gráfico nativo
+                    List<ConteoRespuesta> razones = list(EncuestaDAO.contarRespuestas(28));
+                    int filaInicioP28 = sh.getLastRowNum() + 3;
+                    Row headerP28 = sh.createRow(filaInicioP28 - 1);
+                    headerP28.createCell(0).setCellValue("RAZÓN DEL DESEMPLEO (p28)");
+                    headerP28.createCell(1).setCellValue("TOTAL");
 
-                List<ConteoRespuesta> niv = list(EncuestaDAO.nivelesFormacionDeseados());
-                insertarImagen(wb, sh, chartPie("Nivel de posgrado deseado (p4)",
-                        niv.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        niv.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList())), COL, row, COL + ANCHO_COLS, row + 24);
-                row += 25;
+                    int rIdx = filaInicioP28;
+                    for (ConteoRespuesta c : razones) {
+                        Row r = sh.createRow(rIdx++);
+                        r.createCell(0).setCellValue(c.getRespuesta() == null ? "" : c.getRespuesta().replace('\u00A0', ' ').trim());
+                        r.createCell(1).setCellValue(c.getTotal());
+                    }
+                    int filaFinP28 = rIdx - 1;
 
-                Map<String, Object> fin = EncuestaDAO.tablaFinanciamiento();
-                @SuppressWarnings("unchecked") List<String> filas = (List<String>) fin.get("filas");
-                @SuppressWarnings("unchecked") List<CeldaCruce> celdas = (List<CeldaCruce>) fin.get("celdas");
-                if (filas != null && !filas.isEmpty()) {
-                    List<Double> tot = new ArrayList<>();
-                    List<String> cats = new ArrayList<>();
-                    for (String f : filas) { cats.add(f); tot.add((double) getTotalFila(celdas, f)); }
-                    insertarImagen(wb, sh, chartBar("Matriz p4 × p6: total por nivel de posgrado", "Nivel", "Titulados", cats, tot, "Total"), COL, row, COL + ANCHO_COLS, row + 24);
+                    // Gráfico Nativo 1: Razones del Desempleo (p28)
+                    crearGraficoBarrasNativo(sh, "Razones del desempleo (p28)",
+                            0, 1,
+                            filaInicioP28, filaFinP28,
+                            COL, 3, ANCHO_COLS, 22);
+
+                    // 2. Escribir tabla resumen de Tiempo de Inserción (p36) en la hoja
+                    List<ConteoRespuesta> tiempos = list(EncuestaDAO.contarRespuestas(36));
+                    int filaInicioP36 = filaFinP28 + 3;
+                    Row headerP36 = sh.createRow(filaInicioP36 - 1);
+                    headerP36.createCell(0).setCellValue("TIEMPO HASTA PRIMER EMPLEO (p36)");
+                    headerP36.createCell(1).setCellValue("TOTAL");
+
+                    rIdx = filaInicioP36;
+                    for (ConteoRespuesta c : tiempos) {
+                        Row r = sh.createRow(rIdx++);
+                        r.createCell(0).setCellValue(c.getRespuesta() == null ? "" : c.getRespuesta().replace('\u00A0', ' ').trim());
+                        r.createCell(1).setCellValue(c.getTotal());
+                    }
+                    int filaFinP36 = rIdx - 1;
+
+                    // Gráfico Nativo 2: Tiempo hasta el primer empleo (p36)
+                    crearGraficoBarrasNativo(sh, "Tiempo hasta el primer empleo (p36)",
+                            0, 1,
+                            filaInicioP36, filaFinP36,
+                            COL, 28, ANCHO_COLS, 22);
                 }
-            }
-            case "empleabilidad" -> {
-                List<AreaEmpleabilidad> ae = EncuestaDAO.analisisEmpleabilidad();
-                List<String> cats = ae.stream().map(AreaEmpleabilidad::getArea).collect(java.util.stream.Collectors.toList());
-                List<List<Double>> series = Arrays.asList(
-                        ae.stream().map(a -> (double) a.getDemandaEmpleador()).collect(java.util.stream.Collectors.toList()),
-                        ae.stream().map(a -> (double) a.getInteresTitulados()).collect(java.util.stream.Collectors.toList()),
-                        ae.stream().map(AreaEmpleabilidad::getEmpleabilidad).collect(java.util.stream.Collectors.toList()));
-                insertarImagen(wb, sh, chartBarMulti("Empleabilidad por área (%)", "Área", "Porcentaje",
-                        cats, Arrays.asList("Demanda empleador", "Interés titulados", "Empleabilidad"), series), COL, row, COL + ANCHO_COLS, row + 24);
-                row += 25;
+                case "formacion" -> {
+                    // 1. Gráfico Nativo de Barras para Áreas de Interés (p9)
+                    crearGraficoBarrasNativo(sh, "Áreas de interés de posgrado (p9)", 
+                                            0, 1, 
+                                            3, 7, 
+                                            COL, 3, ANCHO_COLS, 18);
 
-                List<ConteoRespuesta> criticas = razonesCriticas();
-                insertarImagen(wb, sh, chartBar("Oferta con poca demanda: razones críticas (p28)", "Razón", "Frecuencia",
-                        criticas.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        criticas.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total"), COL, row, COL + ANCHO_COLS, row + 24);
-            }
-            case "ubicacion" -> {
-                // Dónde trabajan
-                List<ConteoRespuesta> deptos = list(AnalisisDAO.frecuencias(U_DEPTO, false, new FiltroEnvio()));
-                insertarImagen(wb, sh, chartBar("¿Dónde trabajan los titulados? (p19)", "Departamento", "Titulados",
-                        deptos.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                        deptos.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Titulados"),
-                        COL, row, COL + ANCHO_COLS, row + 24);
-                row += 25;
+                    // 2. Gráfico Nativo de Pastel para Nivel Deseado (p4)
+                    crearGraficoPastelNativo(sh, "Nivel de posgrado deseado (p4)", 
+                                            0, 1, 
+                                            10, 13, 
+                                            COL, 23, ANCHO_COLS, 18);
 
-                // Salario promedio por departamento
-                ResultadoPromedio sal = AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio());
-                List<String> catsS = new ArrayList<>();
-                List<Double> valsS = new ArrayList<>();
-                for (ResumenGrupo g : sal.grupos()) { catsS.add(g.grupo()); valsS.add(g.media() == null ? 0.0 : g.media()); }
-                insertarImagen(wb, sh, chartBar("Salario promedio mensual por departamento (Bs.)", "Departamento", "Media (Bs.)",
-                        catsS, valsS, "Media"), COL, row, COL + ANCHO_COLS, row + 24);
-                row += 25;
-
-                // Pertinencia promedio por cargo
-                ResultadoPromedio pert = AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio());
-                List<String> catsP = new ArrayList<>();
-                List<Double> valsP = new ArrayList<>();
-                for (ResumenGrupo g : pert.grupos()) { catsP.add(g.grupo()); valsP.add(g.media() == null ? 0.0 : g.media()); }
-                insertarImagen(wb, sh, chartBar("Pertinencia promedio por cargo (1-4)", "Cargo", "Media",
-                        catsP, valsP, "Media"), COL, row, COL + ANCHO_COLS, row + 24);
-            }
-            case "hu12" -> {
-                // Un gráfico por pregunta de demanda empresarial (encuesta 2).
-                for (int pid : HU12_DEMANDA) {
-                    insertarImagen(wb, sh, hu12Chart(pid), COL, row, COL + ANCHO_COLS, row + 22);
-                    row += 23;
+                    // 3. Gráfico Nativo de Barras para la Matriz (p4 x p6)
+                    crearGraficoBarrasNativo(sh, "Matriz p4 x p6: Total por Nivel", 
+                                            0, 4, 
+                                            16, 19, 
+                                            COL, 43, ANCHO_COLS, 18);
                 }
+                case "empleabilidad" -> {
+                    // 1. Gráfico Nativo de Barras - Áreas con Mayor Empleabilidad (p21) -> Filas 3 a 19 (Índices 3 a 19)
+                    // Lee la columna D (índice 3, 'EMPLEABILIDAD(%)') y usa las categorías de la columna A (índice 0)
+                    crearGraficoBarrasNativo(sh, "Índice de Empleabilidad por Área (%)", 
+                                            0, 3, 
+                                            3, 19, 
+                                            COL, 3, ANCHO_COLS, 20);
+
+                    // 2. Gráfico Nativo de Barras - Razones Críticas de Poca Demanda (p28) -> Filas 23 a 24 (Índices 23 a 24)
+                    crearGraficoBarrasNativo(sh, "Oferta con poca demanda: Razones críticas (p28)", 
+                                            0, 1, 
+                                            23, 24, 
+                                            COL, 25, ANCHO_COLS, 15);
+
+                    // 3. Gráfico Nativo de Barras - Asignaturas con Poca Utilidad (p44) -> Filas 27 a 37 (Índices 27 a 37)
+                    crearGraficoBarrasNativo(sh, "Asignaturas con poca utilidad laboral (p44) - TOP", 
+                                            0, 1, 
+                                            27, 37, 
+                                            COL, 42, ANCHO_COLS, 18);
+
+                    // 4. Gráfico Nativo de Pastel - Posibilidad de Contratación (p55) -> Filas 57 a 59 (Índices 57 a 59)
+                    crearGraficoPastelNativo(sh, "Posibilidad de Contratación de Titulados (p55)", 
+                                            0, 1, 
+                                            57, 59, 
+                                            COL, 62, ANCHO_COLS, 16);
+                }
+                case "ubicacion" -> {
+                    // 1. Gráfico Nativo de Barras - ¿Dónde trabajan los titulados? (p19) -> Filas 9 a 13 (Índices 9 a 13)
+                    // Toma categorías en Columna A (índice 0) y valores de Total en Columna B (índice 1)
+                    crearGraficoBarrasNativo(sh, "¿Dónde trabajan los titulados? (p19)", 
+                                            0, 1, 
+                                            9, 13, 
+                                            COL, 3, ANCHO_COLS, 18);
+
+                    // 2. Gráfico Nativo de Barras - Salario promedio mensual por departamento (p27 x p19) -> Filas 17 a 21 (Índices 17 a 21)
+                    // Toma categorías en Columna A (índice 0) y valores de Media en Columna D (índice 3)
+                    crearGraficoBarrasNativo(sh, "Salario promedio mensual por departamento (Bs.)", 
+                                            0, 3, 
+                                            17, 21, 
+                                            COL, 23, ANCHO_COLS, 18);
+
+                    // 3. Gráfico Nativo de Barras - Pertinencia promedio por cargo (1-4) -> Filas 27 a 30 (Índices 27 a 30)
+                    // Toma categorías en Columna A (índice 0) y valores de Media en Columna D (índice 3)
+                    crearGraficoBarrasNativo(sh, "Pertinencia promedio por cargo (Escala 1-4)", 
+                                            0, 3, 
+                                            27, 30, 
+                                            COL, 43, ANCHO_COLS, 18);
+                }
+                case "hu12" -> {
+                    int proximaFilaLibreGrafico = 3;
+
+                    // Agrupamos las listas de preguntas (HU12_DEMANDA y HU12_PERCEPCION son de tipo List<Integer>)
+                    List<List<Integer>> grupos = List.of(HU12_DEMANDA, HU12_PERCEPCION);
+
+                    for (List<Integer> grupo : grupos) {
+                        for (int pid : grupo) {
+                            Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+                            var cats = (List<?>) f.get("categorias");
+                            int numFilasData = (cats != null) ? cats.size() : 0;
+
+                            if (numFilasData > 0 && numFilasData <= 12) {
+                                // 1. Escanear la hoja para encontrar la fila del título exacto de la pregunta (ej: "P54:")
+                                String prefijoBusqueda = "P" + pid + ":";
+                                int filaTituloPoi = -1;
+
+                                for (int r = 0; r <= sh.getLastRowNum(); r++) {
+                                    Row fila = sh.getRow(r);
+                                    if (fila != null && fila.getCell(0) != null) {
+                                        String valCell = fila.getCell(0).getStringCellValue();
+                                        if (valCell != null && valCell.startsWith(prefijoBusqueda)) {
+                                            filaTituloPoi = r; // Fila exacta del título en índice POI (base 0)
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // 2. Si la pregunta se encontró en la hoja, calculamos el rango exacto de sus datos
+                                if (filaTituloPoi != -1) {
+                                    // Fila del título = filaTituloPoi
+                                    // Fila del encabezado "RESPUESTA" = filaTituloPoi + 1
+                                    // Primera fila de datos reales = filaTituloPoi + 2
+                                    int inicioDataPoi = filaTituloPoi + 2;
+                                    int finDataPoi = inicioDataPoi + numFilasData - 1;
+
+                                    // Posicionar el gráfico alineado a la tabla sin solapar los anteriores
+                                    int filaPosicionGrafico = Math.max(filaTituloPoi, proximaFilaLibreGrafico);
+
+                                    String tituloGrafico = "P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, "");
+                                    if (tituloGrafico.length() > 45) {
+                                        tituloGrafico = tituloGrafico.substring(0, 42) + "...";
+                                    }
+
+                                    // Generar gráfico nativo vinculado ÚNICAMENTE a las respuestas reales (sin "RESPUESTA")
+                                    crearGraficoBarrasNativo(sh, tituloGrafico,
+                                                            0, 1, // Categorías en Columna A (0), Valores en Columna B (1)
+                                                            inicioDataPoi, finDataPoi,
+                                                            COL, filaPosicionGrafico, ANCHO_COLS, 18);
+
+                                    proximaFilaLibreGrafico = filaPosicionGrafico + 19;
+                                }
+                            }
+                        }
+                    }
+                }
+                default -> { /* sin gráficos */ }
             }
-            default -> { /* sin gráficos */ }
         }
-    }
 
     private static void styleRow(Row r, CellStyle s) {
         // Capturar el límite ANTES de crear celdas 
@@ -1457,6 +1628,7 @@ public class ExportController {
 
     private static int countBlock(List<ConteoRespuesta> l) { return l == null ? 0 : l.size(); }
     private static int getSimpleCount(List<ConteoRespuesta> l) { return l == null ? 0 : l.size(); }
+    
 
     /** Escribe una tabla de frecuencia cruzada (asignatura × variable) en la hoja Excel. Devuelve la próxima fila libre. */
     private static int escribirCruceExcel(Sheet sh, int rowIdx, CellStyle headerStyle, String titulo, List<CeldaCruce> celdas) {
@@ -1545,6 +1717,31 @@ public class ExportController {
         return s;
     }
 
+            /**
+         * Aplica un formato condicional tipo Mapa de Calor (Escala de Colores) a un rango de celdas.
+         */
+        private static void aplicarMapaDeCalor(Sheet sh, int filaInicio, int filaFin, int colInicio, int colFin) {
+            SheetConditionalFormatting conditionalFormatting = sh.getSheetConditionalFormatting();
+            CellRangeAddress[] regions = { new CellRangeAddress(filaInicio, filaFin, colInicio, colFin) };
+
+            // 1. Creación correcta de la regla usando el método nativo de Apache POI
+            org.apache.poi.ss.usermodel.ConditionalFormattingRule rule = 
+                    conditionalFormatting.createConditionalFormattingColorScaleRule();
+
+            // Si tu versión de POI es más antigua y da error en la línea anterior, usa esta alternativa:
+            // org.apache.poi.ss.usermodel.ColorScaleFormatting colorScale = rule.getColorScaleFormatting();
+
+            // 2. Configuración de la regla de color (Blanco a Rojo claro)
+            org.apache.poi.ss.usermodel.ColorScaleFormatting colorScale = rule.getColorScaleFormatting();
+            if (colorScale != null) {
+                colorScale.setNumControlPoints(2);
+                colorScale.getColors()[0] = new org.apache.poi.xssf.usermodel.XSSFColor(new byte[]{(byte) 255, (byte) 255, (byte) 255}, null);
+                colorScale.getColors()[1] = new org.apache.poi.xssf.usermodel.XSSFColor(new byte[]{(byte) 240, (byte) 128, (byte) 128}, null);
+            }
+
+            conditionalFormatting.addConditionalFormatting(regions, rule);
+        }
+
     // PDF 
 
     public static void exportPdf(Context ctx) {
@@ -1581,7 +1778,11 @@ public class ExportController {
         sb.append(".num{text-align:right}");
         sb.append(".alert{background:#fff3cd;border:1px solid #ffe69c;padding:6px 8px;border-radius:4px;margin:6px 0}");
         sb.append("</style></head><body>");
-        sb.append("<h1>REPORTE UMSS - ").append(esc(tipo.toUpperCase())).append("</h1>");
+        if ("hu12".equalsIgnoreCase(tipo)) {
+            sb.append("<h1>REPORTE UMSS - DEMANDA EMPRESARIAL Y RED ALUMNO</h1>");
+        } else {
+            sb.append("<h1>REPORTE UMSS - ").append(esc(tipo.toUpperCase())).append("</h1>");
+        }
         sb.append("<div class='meta'>Generado: ").append(DF.format(new Date())).append("</div>");
         try {
             switch (tipo) {
@@ -1651,25 +1852,34 @@ public class ExportController {
                     if (fe == null) fe = Collections.emptyList();
                     Map<Integer,List<ConteoRespuesta>> mp = new LinkedHashMap<>();
                     for (ConteoRespuesta f : fe) mp.computeIfAbsent(f.getPreguntaId(), k->new ArrayList<>()).add(f);
+
                     htmlEmpBlock(sb,"Origen del emprendimiento (p30)", mp.getOrDefault(30,new ArrayList<>()));
                     htmlEmpBlock(sb,"Tipo de entregable (p31)", mp.getOrDefault(31,new ArrayList<>()));
                     htmlEmpBlock(sb,"Financiamiento externo (p32)", mp.getOrDefault(32,new ArrayList<>()));
                     htmlEmpBlock(sb,"Satisfacción con el rendimiento (p33)", mp.getOrDefault(33,new ArrayList<>()));
                     htmlEmpBlock(sb,"Importancia de la formación (p34)", mp.getOrDefault(34,new ArrayList<>()));
+
                     List<ConteoRespuesta> d30h = mp.getOrDefault(30,new ArrayList<>());
-                    ConteoRespuesta sph=null,sth=null;
-                    for (ConteoRespuesta cp:d30h){ String r=cp.getRespuesta()==null?"":cp.getRespuesta().toLowerCase(); if(r.contains("spin")) sph=cp; if(r.contains("start")) sth=cp;}
+                    ConteoRespuesta sph=null, sth=null;
+                    for (ConteoRespuesta cp:d30h){ 
+                        String r = cp.getRespuesta()==null ? "" : cp.getRespuesta().toLowerCase(); 
+                        if(r.contains("spin")) sph=cp; 
+                        if(r.contains("start")) sth=cp;
+                    }
+
+                    // FIX HALLAZGO A: Se quitó la línea duplicada de Spin Off
                     sb.append("<h3>Comparativo: Spin-offs vs Startups (p30)</h3><table><tr><th>CATEGORÍA</th><th class='num'>TOTAL</th></tr>");
                     sb.append("<tr><td>Spin Off</td><td class='num'>").append(sph==null?0:sph.getTotal()).append("</td></tr>");
-                    sb.append("<tr><td>Spin Off</td><td class='num'>").append(sph==null?0:sph.getTotal()).append("</td></tr>");
                     sb.append("<tr><td>StartUp</td><td class='num'>").append(sth==null?0:sth.getTotal()).append("</td></tr></table>");
+
                     // Resumen y recomendaciones
                     sb.append("<h3>Resumen y recomendación</h3><ul>");
                     for (String b : resumenEmprendimientoBullets(mp)) sb.append("<li>").append(esc(b)).append("</li>");
                     sb.append("</ul><h3>Recomendaciones para el Plan de Desarrollo Estratégico</h3><ul>");
                     for (String r : resumenEmprendimientoRecomendaciones(mp)) sb.append("<li>").append(esc(r)).append("</li>");
                     sb.append("</ul>");
-                    // Gráficos
+
+                    // FIX HALLAZGO B: Gráficos limpios
                     int[] pids = {30,31,32,33,34};
                     String[] titulos = {"Origen del emprendimiento (p30)","Tipo de entregable (p31)","Financiamiento externo (p32)","Satisfacción con el rendimiento (p33)","Importancia de la formación (p34)"};
                     for (int k = 0; k < pids.length; k++) {
@@ -1704,89 +1914,158 @@ public class ExportController {
                 }
                 case "formacion" -> {
                     sb.append("<h2>4. Formación continua y Mecanismos de financiamiento</h2>");
+                    
+                    // 1. Áreas de Interés (p9)
                     List<AreaInteresPosgrado> ap9h = EncuestaDAO.areasInteresPosgrado();
                     int Np9h=0; for (AreaInteresPosgrado a:ap9h) Np9h+=a.getN();
                     sb.append("<h3>Áreas de interés de posgrado (p9)</h3><table><tr><th>ÁREA</th><th class='num'>n</th><th class='num'>f_i (%)</th></tr>");
                     for (AreaInteresPosgrado a:ap9h) sb.append("<tr><td>").append(esc(a.getArea())).append("</td><td class='num'>").append(a.getN()).append("</td><td class='num'>").append(DF2.format(a.getPorcentaje())).append("</td></tr>");
                     sb.append("</table>");
-                    if (Np9h>0){ long t1=ap9h.isEmpty()?0:ap9h.get(0).getN(); long t2=ap9h.size()<2?t1:t1+ap9h.get(1).getN(); double pt2=t2*100.0/Np9h; sb.append("<div class='alert'><strong>Alerta de Concentración Crítica:</strong> Suma Top 2 = ").append(t2).append("/").append(Np9h).append(" (").append(DF2.format(pt2)).append("%) — Umbral ≥ 70% → ").append(pt2>=70?"<strong>SÍ (CRÍTICA)</strong>":"NO").append("</div>"); }
+                    
+                    // Alerta de Concentración (Usando &#8805; para >= y &#8594; para ->)
+                    if (Np9h>0){ 
+                        long t1=ap9h.isEmpty()?0:ap9h.get(0).getN(); 
+                        long t2=ap9h.size()<2?t1:t1+ap9h.get(1).getN(); 
+                        double pt2=t2*100.0/Np9h; 
+                        // En lugar de entidades o >= directo, usa texto limpio o escapes simples:
+                        sb.append("<div class='alert'><strong>Alerta de Concentración Crítica:</strong> Suma Top 2 = ")
+                        .append(t2).append("/").append(Np9h).append(" (").append(DF2.format(pt2))
+                        .append("%) — Umbral mayor o igual a 70% -&gt; ")
+                        .append(pt2>=70?"<strong>SÍ (CRÍTICA)</strong>":"NO").append("</div>");
+                    }
+                    
+                    // 2. Nivel Deseado (p4)
                     List<ConteoRespuesta> np4h = EncuestaDAO.nivelesFormacionDeseados();
                     int tn4h=0; for (ConteoRespuesta c:np4h) tn4h+=c.getTotal();
                     sb.append("<h3>Nivel de posgrado deseado (p4)</h3><table><tr><th>NIVEL</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
                     for (ConteoRespuesta c:np4h){ double p=tn4h==0?0:c.getTotal()*100.0/tn4h; sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>").append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(p)).append("</td></tr>"); }
                     sb.append("</table>");
+                    
+                    // 3. Matriz de Contingencia
                     Map<String,Object> finh = EncuestaDAO.tablaFinanciamiento();
                     @SuppressWarnings("unchecked") List<String> fh=(List<String>)finh.get("filas");
                     @SuppressWarnings("unchecked") List<String> ch=(List<String>)finh.get("columnas");
                     @SuppressWarnings("unchecked") List<CeldaCruce> ceh=(List<CeldaCruce>)finh.get("celdas");
-                    sb.append("<h3>Matriz de Contingencia: p4 × p6 (Nivel × Fuente de financiamiento)</h3><table><tr><th>NIVEL / FUENTE</th>");
+                    sb.append("<h3>Matriz de Contingencia: p4 x p6 (Nivel x Fuente de financiamiento)</h3><table><tr><th>NIVEL / FUENTE</th>");
                     for (String c:ch) sb.append("<th class='num'>").append(esc(c)).append("</th>");
                     sb.append("<th class='num'>TOTAL_FILA</th></tr>");
                     for (String f:fh){ sb.append("<tr><th>").append(esc(f)).append("</th>"); for (String c:ch) sb.append("<td class='num'>").append(getCelda(ceh,f,c)).append("</td>"); sb.append("<td class='num'>").append(getTotalFila(ceh,f)).append("</td></tr>"); }
                     sb.append("<tr><th>TOTAL_COLUMNA</th>"); for (String c:ch) sb.append("<td class='num'>").append(getTotalCol(ceh,c)).append("</td>"); sb.append("<td class='num'><strong>").append(getTotalGeneral(ceh)).append("</strong></td></tr></table>");
+                    
+                    // 4. Chi-cuadrado
                     ResultadoChi2 rch = (ResultadoChi2)finh.get("chi2");
                     Boolean tfh=(Boolean)finh.get("tieneDatos");
-                    if (rch!=null){ sb.append("<h3>Diagnóstico Estadístico (χ² de Independencia)</h3><table><tr><th>ÍNDICE</th><th>VALOR</th></tr>"); sb.append("<tr><td>χ²</td><td>").append(rch.getChiCuadrado()).append("</td></tr>"); sb.append("<tr><td>gl</td><td>").append(rch.getGradosLibertad()).append("</td></tr>"); sb.append("<tr><td>p-valor</td><td>").append(rch.getValorP()).append("</td></tr>"); sb.append("<tr><td>Independiente (p ≥ 0.05)</td><td>").append(rch.isIndependiente()?"SÍ":"NO").append("</td></tr>"); sb.append("<tr><td>Datos suficientes</td><td>").append((tfh!=null&&tfh)?"SÍ":"NO").append("</td></tr>"); sb.append("<tr><td>Interpretación</td><td>").append(esc(rch.getInterpretacion())).append("</td></tr></table>"); }
-                    // Gráficos
-                    sb.append(htmlChart("Áreas de interés de posgrado (p9)", chartBar("Áreas de interés de posgrado", "Área", "n",
+                    if (rch!=null){ 
+                        sb.append("<h3>Diagnóstico Estadístico (Chi-cuadrado de Independencia)</h3><table><tr><th>ÍNDICE</th><th>VALOR</th></tr>"); 
+                        sb.append("<tr><td>Chi-cuadrado (Chi2)</td><td>").append(rch.getChiCuadrado()).append("</td></tr>"); 
+                        sb.append("<tr><td>gl</td><td>").append(rch.getGradosLibertad()).append("</td></tr>"); 
+                        sb.append("<tr><td>p-valor</td><td>").append(rch.getValorP()).append("</td></tr>"); 
+                        sb.append("<tr><td>Independiente (p &gt;= 0.05)</td><td>").append(rch.isIndependiente()?"SÍ":"NO").append("</td></tr>");
+                        sb.append("<tr><td>Datos suficientes</td><td>").append((tfh!=null&&tfh)?"SÍ":"NO").append("</td></tr>"); 
+                        
+                        String interpLimpia = rch.getInterpretacion() == null ? "" : rch.getInterpretacion().replace("χ²", "Chi2");
+                        sb.append("<tr><td>Interpretación</td><td>").append(esc(interpLimpia)).append("</td></tr></table>"); 
+                    }
+                    
+                    // 5. Gráficos
+                    sb.append(htmlChart("Áreas de interés de posgrado (p9)", chartBar("", "Área", "n",
                             ap9h.stream().map(AreaInteresPosgrado::getArea).collect(java.util.stream.Collectors.toList()),
                             ap9h.stream().map(a -> (double) a.getN()).collect(java.util.stream.Collectors.toList()), "n")));
-                    sb.append(htmlChart("Nivel de posgrado deseado (p4)", chartPie("Nivel de posgrado deseado (p4)",
+                            
+                    sb.append(htmlChart("Nivel de posgrado deseado (p4)", chartPie("",
                             np4h.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
                             np4h.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()))));
+                            
                     if (fh != null && !fh.isEmpty()) {
                         List<Double> totF = new ArrayList<>();
                         for (String f : fh) totF.add((double) getTotalFila(ceh, f));
-                        sb.append(htmlChart("Matriz p4 × p6: total por nivel de posgrado", chartBar("Total por nivel de posgrado", "Nivel", "Titulados", fh, totF, "Total")));
+                        sb.append(htmlChart("Matriz p4 x p6: total por nivel de posgrado", chartBar("", "Nivel", "Titulados", fh, totF, "Total")));
                     }
                 }
                 case "empleabilidad" -> {
                     sb.append("<h2>5. Empleabilidad y Ofertas con poca demanda</h2>");
+                    
+                    // Tablas HTML
                     sb.append("<h3>Áreas con mayor empleabilidad</h3><table><tr><th>ÁREA</th><th class='num'>DEMANDA EMPL.(%)</th><th class='num'>INTERÉS TIT.(%)</th><th class='num'>EMPLEABILIDAD(%)</th></tr>");
                     for (AreaEmpleabilidad a:EncuestaDAO.analisisEmpleabilidad()) sb.append("<tr><td>").append(esc(a.getArea())).append("</td><td class='num'>").append(a.getDemandaEmpleador()).append("</td><td class='num'>").append(a.getInteresTitulados()).append("</td><td class='num'><strong>").append(a.getEmpleabilidad()).append("</strong></td></tr>");
                     sb.append("</table>");
-                    htmlSimpleBlock(sb,"Razones críticas (p28)", razonesCriticas());
-                    htmlSimpleBlock(sb,"Asignaturas con poca utilidad (p44) - Top", asignaturasPocaTop(20));
-                    htmlSimpleBlock(sb,"Rubros de inversión/requerimientos (p53)", EncuestaDAO.contarRespuestas(53));
-                    htmlSimpleBlock(sb,"Posibilidad de contratación de titulados (p55)", EncuestaDAO.contarRespuestas(55));
-                    // Gráficos
+                    
+                    htmlSimpleBlock(sb, "Razones críticas (p28)", razonesCriticas());
+                    htmlSimpleBlock(sb, "Asignaturas con poca utilidad (p44) - Top", asignaturasPocaTop(20));
+                    htmlSimpleBlock(sb, "Rubros de inversión/requerimientos (p53)", EncuestaDAO.contarRespuestas(53));
+                    htmlSimpleBlock(sb, "Posibilidad de contratación de titulados (p55)", EncuestaDAO.contarRespuestas(55));
+                    
+                    // ==========================================
+                    // RENDERIZADO DE LOS 5 GRÁFICOS COMPLETOS
+                    // ==========================================
+                    
+                    // 1. Empleabilidad por área (Multi-serie)
                     List<AreaEmpleabilidad> aeH = EncuestaDAO.analisisEmpleabilidad();
                     List<String> catsE = aeH.stream().map(AreaEmpleabilidad::getArea).collect(java.util.stream.Collectors.toList());
                     List<List<Double>> serE = Arrays.asList(
                             aeH.stream().map(a -> (double) a.getDemandaEmpleador()).collect(java.util.stream.Collectors.toList()),
                             aeH.stream().map(a -> (double) a.getInteresTitulados()).collect(java.util.stream.Collectors.toList()),
                             aeH.stream().map(AreaEmpleabilidad::getEmpleabilidad).collect(java.util.stream.Collectors.toList()));
-                    sb.append(htmlChart("Empleabilidad por área (%)", chartBarMulti("Empleabilidad por área", "Área", "Porcentaje",
-                            catsE, Arrays.asList("Demanda empleador", "Interés titulados", "Empleabilidad"), serE)));
+                            
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Empleabilidad por área (%)", chartBarMulti("", "Área", "Porcentaje",
+                            catsE, Arrays.asList("Demanda empleador", "Interés titulados", "Empleabilidad"), serE)))
+                    .append("</div>");
+                    
+                    // 2. Razones críticas (p28)
                     List<ConteoRespuesta> crH = razonesCriticas();
-                    sb.append(htmlChart("Oferta con poca demanda: razones críticas (p28)", chartBar("Razones críticas", "Razón", "Frecuencia",
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Oferta con poca demanda: razones críticas (p28)", chartBar("", "Razón", "Frecuencia",
                             crH.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            crH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")));
-                }
-                case "cruce" -> {
-                    sb.append("<h2>6. Cruce de Variables</h2>");
-                    sb.append("<p>El cruce dinámico (X × Y) se configura en la interfaz gráfica. Esta exportación presenta la estructura de matrices de frecuencia cruzada para referencia.</p>");
+                            crH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")))
+                    .append("</div>");
+                    
+                    // 3. Asignaturas con poca utilidad (p44)
+                    List<ConteoRespuesta> asigH = asignaturasPocaTop(20);
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Asignaturas con poca utilidad laboral (p44) - Top", chartBar("", "Asignatura", "Menciones",
+                            asigH.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                            asigH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Menciones")))
+                    .append("</div>");
+                    
+                    // 4. Rubros de Inversión (p53)
+                    List<ConteoRespuesta> r53H = EncuestaDAO.contarRespuestas(53);
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Rubros de inversión / requerimientos (p53)", chartBar("", "Rubro", "Frecuencia",
+                            r53H.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                            r53H.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Frecuencia")))
+                    .append("</div>");
+                    
+                    // 5. Posibilidad de Contratación (p55)
+                    List<ConteoRespuesta> r55H = EncuestaDAO.contarRespuestas(55);
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Posibilidad de contratación de titulados (p55)", chartPie("",
+                            r55H.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                            r55H.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()))))
+                    .append("</div>");
                 }
                 case "ubicacion" -> {
-                    sb.append("<h2>7. Pertinencia Curricular, Geografía y Fuga de Talentos (HU11)</h2>");
+                    // 1. Título principal limpio (sin HU11)
+                    sb.append("<h2>7. Pertinencia Curricular, Geografía y Fuga de Talentos</h2>");
+
                     int[] k = kpisUbicacion();
                     sb.append("<h3>Indicadores clave (p19: departamento de trabajo)</h3>");
                     sb.append("<table><tr><th>INDICADOR</th><th class='num'>VALOR</th><th class='num'>%</th></tr>");
                     sb.append("<tr><td>Titulados analizados</td><td class='num'>").append(k[0]).append("</td><td class='num'>")
-                      .append(DF2.format(100.0)).append("</td></tr>");
+                    .append(DF2.format(100.0)).append("</td></tr>");
                     sb.append("<tr><td>Trabajan en Cochabamba</td><td class='num'>").append(k[1]).append("</td><td class='num'>")
-                      .append(DF2.format(pctDe(k[1], k[0]))).append("</td></tr>");
+                    .append(DF2.format(pctDe(k[1], k[0]))).append("</td></tr>");
                     sb.append("<tr><td>Fuera del departamento base (fuga)</td><td class='num'>").append(k[2]).append("</td><td class='num'>")
-                      .append(DF2.format(pctDe(k[2], k[0]))).append("</td></tr>");
+                    .append(DF2.format(pctDe(k[2], k[0]))).append("</td></tr>");
                     sb.append("<tr><td>En el extranjero</td><td class='num'>").append(k[3]).append("</td><td class='num'>")
-                      .append(DF2.format(pctDe(k[3], k[0]))).append("</td></tr></table>");
+                    .append(DF2.format(pctDe(k[3], k[0]))).append("</td></tr></table>");
 
                     sb.append("<h3>¿Dónde trabajan los titulados? (p19)</h3>");
                     List<ConteoRespuesta> deptosH = AnalisisDAO.frecuencias(U_DEPTO, false, new FiltroEnvio());
                     sb.append("<table><tr><th>DEPARTAMENTO</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
                     for (ConteoRespuesta c : deptosH)
                         sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>")
-                          .append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(c.getPorcentaje())).append("</td></tr>");
+                        .append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(c.getPorcentaje())).append("</td></tr>");
                     sb.append("</table>");
 
                     sb.append("<h3>Salario promedio mensual por departamento (p27 × p19)</h3>");
@@ -1802,26 +2081,71 @@ public class ExportController {
                     sb.append("<h3>Cruce: Ubicación (p19) × Pertinencia (p24)</h3>");
                     htmlChi(sb, chi2auto(U_DEPTO, U_PERT));
 
-                    // Gráficos
+                    // ==========================================
+                    // GRÁFICOS SIN TÍTULOS DUPLICADOS Y CON PÁGINA ENMARCADA
+                    // ==========================================
                     List<String> catsD = deptosH.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList());
                     List<Double> valsD = deptosH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList());
-                    sb.append(htmlChart("¿Dónde trabajan los titulados? (p19)", chartBar("¿Dónde trabajan los titulados?", "Departamento", "Titulados", catsD, valsD, "Titulados")));
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("¿Dónde trabajan los titulados? (p19)", chartBar("", "Departamento", "Titulados", catsD, valsD, "Titulados")))
+                    .append("</div>");
+
                     ResultadoPromedio salH = AnalisisDAO.promedioPorGrupo(U_SALARIO, U_DEPTO, new FiltroEnvio());
                     List<String> catsS = new ArrayList<>(); List<Double> valsS = new ArrayList<>();
-                    for (ResumenGrupo g : salH.grupos()) { catsS.add(g.grupo()); valsS.add(g.media() == null ? 0.0 : g.media()); }
-                    sb.append(htmlChart("Salario promedio mensual por departamento (Bs.)", chartBar("Salario promedio por departamento", "Departamento", "Media (Bs.)", catsS, valsS, "Media")));
+                    for (ResumenGrupo g : salH.grupos()) { 
+                        if (!"GENERAL".equalsIgnoreCase(g.grupo())) {
+                            catsS.add(g.grupo()); 
+                            valsS.add(g.media() == null ? 0.0 : g.media()); 
+                        }
+                    }
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Salario promedio mensual por departamento (Bs.)", chartBar("", "Departamento", "Media (Bs.)", catsS, valsS, "Media")))
+                    .append("</div>");
+
                     ResultadoPromedio pertH = AnalisisDAO.promedioPorGrupo(U_PERT, U_CARGO, new FiltroEnvio());
                     List<String> catsP = new ArrayList<>(); List<Double> valsP = new ArrayList<>();
-                    for (ResumenGrupo g : pertH.grupos()) { catsP.add(g.grupo()); valsP.add(g.media() == null ? 0.0 : g.media()); }
-                    sb.append(htmlChart("Pertinencia promedio por cargo (1-4)", chartBar("Pertinencia promedio por cargo", "Cargo", "Media", catsP, valsP, "Media")));
+                    for (ResumenGrupo g : pertH.grupos()) { 
+                        if (!"GENERAL".equalsIgnoreCase(g.grupo())) {
+                            catsP.add(g.grupo()); 
+                            valsP.add(g.media() == null ? 0.0 : g.media()); 
+                        }
+                    }
+                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
+                    .append(htmlChart("Pertinencia promedio por cargo (Escala 1-4)", chartBar("", "Cargo", "Media", catsP, valsP, "Media")))
+                    .append("</div>");
                 }
                 case "hu12" -> {
-                    sb.append("<h2>8. Demanda Empresarial y Red Alumno (HU12)</h2>");
+                    sb.append("<h2>8. Demanda Empresarial y Red Alumno</h2>");
                     sb.append("<h3>Grupo 1: Demanda empresarial (encuesta 2)</h3>");
-                    for (int pid : HU12_DEMANDA) htmlHu12(sb, pid);
+                    
+                    // 1. Grupo 1: Imprime Tabla + Gráfico de forma entrelazada (solo si tiene <= 12 opciones)
+                    for (int pid : HU12_DEMANDA) {
+                        htmlHu12(sb, pid); // Imprime la tabla HTML
+                        
+                        Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+                        List<?> cats = (List<?>) f.get("categorias");
+                        int numFilas = (cats != null) ? cats.size() : 0;
+                        
+                        // Filtro: Solo genera e inserta gráfico si no es de texto libre / tiene <= 12 categorías
+                        if (numFilas > 0 && numFilas <= 12) {
+                            sb.append(htmlChart("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, ""), hu12Chart(pid)));
+                        }
+                    }
+                    
                     sb.append("<h3>Grupo 2: Percepción de la formación (encuesta 2)</h3>");
-                    for (int pid : HU12_PERCEPCION) htmlHu12(sb, pid);
+                    for (int pid : HU12_PERCEPCION) {
+                        htmlHu12(sb, pid);
+                        
+                        Map<String, Object> f = ReporteHu12DAO.obtenerFrecuencias(2, pid);
+                        List<?> cats = (List<?>) f.get("categorias");
+                        int numFilas = (cats != null) ? cats.size() : 0;
+                        
+                        if (numFilas > 0 && numFilas <= 12) {
+                            sb.append(htmlChart("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, ""), hu12Chart(pid)));
+                        }
+                    }
 
+                    // Red Alumno
                     Map<String, Object> red = ReporteHu12DAO.obteneralumno();
                     sb.append("<h3>Grupo 3: Red Alumno - Consentimiento de contacto (p46)</h3>");
                     sb.append("<table><tr><th>INDICADOR</th><th class='num'>VALOR</th></tr>");
@@ -1831,9 +2155,8 @@ public class ExportController {
                     sb.append("<tr><td>Con teléfono</td><td class='num'>").append(red.get("conTelefono")).append("</td></tr>");
                     sb.append("<tr><td>Con LinkedIn</td><td class='num'>").append(red.get("conLinkedin")).append("</td></tr></table>");
                     sb.append("<p class='meta'>El listado de contactos (correo/teléfono/LinkedIn) solo se muestra en la interfaz a usuarios autorizados.</p>");
-
-                    // Gráficos: demanda empresarial
-                    for (int pid : HU12_DEMANDA) sb.append(htmlChart("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, ""), hu12Chart(pid)));
+                    
+                    // (SE ELIMINÓ LA LÍNEA 2131 QUE REPETÍA Y AMONTONABA LOS GRÁFICOS AL FINAL)
                 }
                 default -> sb.append("<p>Tipo de reporte no soportado para exportación completa.</p>");
             }
