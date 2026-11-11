@@ -291,7 +291,10 @@ public class EncuestaDAO {
     }
 
     private static String normalizar(String s) {
-        String t = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        if (s == null) return "";
+        // Reemplaza NBSP (\u00a0) por espacio normal antes de normalizar
+        String limpio = s.replace('\u00a0', ' ').replace("\u00A0", " ");
+        String t = Normalizer.normalize(limpio, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
         return t.toLowerCase().replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
     }
 
@@ -784,6 +787,27 @@ public class EncuestaDAO {
             }
         }
 
+        // --- INICIO FIX BUG N=0 ---
+        if (N == 0) {
+            ResultadoChi2 rchiVacio = new ResultadoChi2();
+            rchiVacio.setChiCuadrado(0.0);
+            rchiVacio.setGradosLibertad(0);
+            rchiVacio.setValorP(1.0);
+            rchiVacio.setIndependiente(true);
+            rchiVacio.setInterpretacion("Sin datos suficientes de encuestas para realizar la prueba estadística Chi-cuadrado (N = 0).");
+
+            out.put("filas", new ArrayList<String>());
+            out.put("columnas", new ArrayList<String>());
+            out.put("conteoFilas", new LinkedHashMap<String, Integer>());
+            out.put("conteoCols", new LinkedHashMap<String, Integer>());
+            out.put("celdas", new ArrayList<CeldaCruce>());
+            out.put("tieneDatos", false);
+            out.put("totalN", 0);
+            out.put("chi2", rchiVacio);
+            return out;
+        }
+        // --- FIN FIX BUG N=0 ---
+        
         ArrayList<CeldaCruce> celdasObs = new ArrayList<>();
         for (int i = 0; i < filas.size(); i++) {
             for (int j = 0; j < columnas.size(); j++) {

@@ -187,47 +187,61 @@
         </div>
       </div>`);
 
-    // Tarjetas de diagnóstico χ²
-    cont.insertAdjacentHTML('beforeend', `
-      <div class="col-12 mt-3">
-        <div class="card border-0 shadow-sm">
-          <div class="card-body">
-            <h6 class="fw-bold text-secondary">Diagnóstico estadístico · Chi-cuadrado (χ²)</h6>
-            <div class="row g-3 mt-1">
-              <div class="col-md-3">
-                <div class="border rounded p-2 h-100">
-                  <div class="small text-muted">χ² calculado</div>
-                  <div class="fs-4 fw-bold">${Number(chi2.chiCuadrado || 0).toFixed(3)}</div>
-                </div>
+    // Tarjetas de diagnóstico χ² (Con validación de N > 0)
+    if (!tieneDatos || totalN === 0) {
+      cont.insertAdjacentHTML('beforeend', `
+        <div class="col-12 mt-3">
+          <div class="card border-0 shadow-sm">
+            <div class="card-body">
+              <h6 class="fw-bold text-secondary">Diagnóstico estadístico · Chi-cuadrado (χ²)</h6>
+              <div class="alert alert-warning border mt-2 mb-0 small">
+                <strong>Sin datos:</strong> No existen respuestas suficientes registradas para ejecutar la prueba de independencia Chi-cuadrado (N = 0).
               </div>
-              <div class="col-md-3">
-                <div class="border rounded p-2 h-100">
-                  <div class="small text-muted">Grados de libertad (gl)</div>
-                  <div class="fs-4 fw-bold">${chi2.gradosLibertad ?? 0}</div>
-                </div>
-              </div>
-              <div class="col-md-3">
-                <div class="border rounded p-2 h-100">
-                  <div class="small text-muted">Valor p (p-value)</div>
-                  <div class="fs-4 fw-bold">${Number(chi2.valorP || 1).toFixed(3)}</div>
-                </div>
-              </div>
-              <div class="col-md-3">
-                <div class="border rounded p-2 h-100">
-                  <div class="small text-muted">Resultado de independencia</div>
-                  <div class="fw-bold ${chi2.independiente ? 'text-success' : 'text-danger'}">
-                    ${chi2.independiente ? 'No se rechaza H₀ (independiente)' : 'Se rechaza H₀ (dependiente)'}
-                  </div>
-                  <div class="small text-muted">Umbral: p < 0.05</div>
-                </div>
-              </div>
-            </div>
-            <div class="alert alert-light border mt-3 mb-0 small">
-              <strong>Interpretación:</strong> ${escapar(chi2.interpretacion || '')}
             </div>
           </div>
-        </div>
-      </div>`);
+        </div>`);
+    } else {
+      cont.insertAdjacentHTML('beforeend', `
+        <div class="col-12 mt-3">
+          <div class="card border-0 shadow-sm">
+            <div class="card-body">
+              <h6 class="fw-bold text-secondary">Diagnóstico estadístico · Chi-cuadrado (χ²)</h6>
+              <div class="row g-3 mt-1">
+                <div class="col-md-3">
+                  <div class="border rounded p-2 h-100">
+                    <div class="small text-muted">χ² calculado</div>
+                    <div class="fs-4 fw-bold">${Number(chi2.chiCuadrado || 0).toFixed(3)}</div>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="border rounded p-2 h-100">
+                    <div class="small text-muted">Grados de libertad (gl)</div>
+                    <div class="fs-4 fw-bold">${chi2.gradosLibertad ?? 0}</div>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="border rounded p-2 h-100">
+                    <div class="small text-muted">Valor p (p-value)</div>
+                    <div class="fs-4 fw-bold">${Number(chi2.valorP || 1).toFixed(3)}</div>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="border rounded p-2 h-100">
+                    <div class="small text-muted">Resultado de independencia</div>
+                    <div class="fw-bold ${chi2.independiente ? 'text-success' : 'text-danger'}">
+                      ${chi2.independiente ? 'No se rechaza H₀ (independiente)' : 'Se rechaza H₀ (dependiente)'}
+                    </div>
+                    <div class="small text-muted">Umbral: p < 0.05</div>
+                  </div>
+                </div>
+              </div>
+              <div class="alert alert-light border mt-3 mb-0 small">
+                <strong>Interpretación:</strong> ${escapar(chi2.interpretacion || '')}
+              </div>
+            </div>
+          </div>
+        </div>`);
+    }
   }
 
   function renderResumen(cont, d) {
