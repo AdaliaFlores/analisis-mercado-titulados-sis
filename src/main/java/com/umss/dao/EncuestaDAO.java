@@ -268,15 +268,14 @@ public class EncuestaDAO {
         StringBuilder in = new StringBuilder();
         for (int i = 0; i < preguntas.length; i++) in.append(i == 0 ? "?" : ",?");
 
-        // CÓDIGO NUEVO (CORREGIDO):
-            String sql = "SELECT pregunta_id, "
-                    + "RTRIM(TRIM(respuesta), '.') AS respuesta, "
-                    + "COUNT(*) AS total, "
-                    + "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY pregunta_id), 1) AS porcentaje "
-                    + "FROM respuestas "
-                    + "WHERE pregunta_id IN (" + in + ") AND respuesta IS NOT NULL AND TRIM(respuesta) <> '' "
-                    + "GROUP BY pregunta_id, RTRIM(TRIM(respuesta), '.') "
-                    + "ORDER BY pregunta_id, total DESC";
+        String sql = "SELECT pregunta_id, "
+                + "RTRIM(TRIM(respuesta), '.') AS respuesta, "
+                + "COUNT(*) AS total, "
+                + "ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY pregunta_id), 1) AS porcentaje "
+                + "FROM respuestas "
+                + "WHERE pregunta_id IN (" + in + ") AND respuesta IS NOT NULL AND TRIM(respuesta) <> '' "
+                + "GROUP BY pregunta_id, RTRIM(TRIM(respuesta), '.') "
+                + "ORDER BY pregunta_id, total DESC";
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -639,53 +638,93 @@ public class EncuestaDAO {
     }
 
     public static List<AreaEmpleabilidad> analisisEmpleabilidad() throws SQLException {
-            // 1. Obtener respuestas de Empleadores (Demanda Tecnológica)
-            Map<String, List<String>> porEmpleador = new LinkedHashMap<>();
-            String sqlE = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
-                        + "WHERE r.pregunta_id IN (59,60,61) AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
-            try (Connection conn = Database.getConnection();
-                Statement st = conn.createStatement();
-                ResultSet rs = st.executeQuery(sqlE)) {
-                while (rs.next())
-                    porEmpleador.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
-            }
-            int totalEmpleadores = porEmpleador.isEmpty() ? 80 : porEmpleador.size();
+        List<AreaEmpleabilidad> resultado = new ArrayList<>();
 
-            // 2. Obtener respuestas de Titulados (Pregunta 9 de Interés de Posgrado)
-            Map<String, List<String>> porTitulado = new LinkedHashMap<>();
-            String sqlT = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
-                        + "WHERE r.pregunta_id = 9 AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
-            try (Connection conn = Database.getConnection();
-                Statement st = conn.createStatement();
-                ResultSet rs = st.executeQuery(sqlT)) {
-                while (rs.next())
-                    porTitulado.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
-            }
-            int totalTitulados = porTitulado.isEmpty() ? 148 : porTitulado.size();
+        // 1. Contar interés de titulados en las 5 áreas cerradas oficiales (N = 155)
+        Map<String, Integer> tituladosMap = new LinkedHashMap<>();
+        tituladosMap.put("IA", 0);
+        tituladosMap.put("Ingenieria de Software", 0);
+        tituladosMap.put("Redes de Datos y Seguridad", 0);
+        tituladosMap.put("Base de Datos", 0);
+        tituladosMap.put("Robótica", 0);
 
-            // 3. Conteo directo de áreas sin usar el filtro de materias universitarias
-            List<AreaEmpleabilidad> lista = new ArrayList<>();
-            for (Map.Entry<String, String[]> area : DICCIONARIO.entrySet()) {
-                int obj = 0;
-                for (List<String> resp : porEmpleador.values()) {
-                    if (mencionaAlguna(resp, area.getValue())) obj++;
-                }
+        int totalTitulados = 0;
+        String sqlTit = "SELECT TRIM(respuesta) AS area, COUNT(*) AS total "
+                      + "FROM respuestas "
+                      + "WHERE pregunta_id = 9 AND respuesta IS NOT NULL AND TRIM(respuesta) <> '' " // <-- Verifica que 12 sea el ID de Area_Interes_Posgrado
+                      + "GROUP BY TRIM(respuesta)";
 
-                int act = 0;
-                for (List<String> resp : porTitulado.values()) {
-                    if (mencionaAlguna(resp, area.getValue())) act++;
-                }
-
-                double demanda = porcentaje(obj, totalEmpleadores);
-                double interes = porcentaje(act, totalTitulados);
-
-                if (demanda > 0 || interes > 0) {
-                    lista.add(new AreaEmpleabilidad(area.getKey(), demanda, interes));
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlTit);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                String area = rs.getString("area").trim();
+                int cant = rs.getInt("total");
+                for (String key : tituladosMap.keySet()) {
+                    // Comparación exacta ignorando mayúsculas y tildes en la "i"
+                    String normArea = area.replace("í", "i").replace("Í", "I");
+                    String normKey = key.replace("í", "i").replace("Í", "I");
+                    if (normKey.equalsIgnoreCase(normArea)) {
+                        tituladosMap.put(key, tituladosMap.get(key) + cant);
+                        totalTitulados += cant;
+                        break;
+                    }
                 }
             }
-            lista.sort((a, b) -> Double.compare(b.getEmpleabilidad(), a.getEmpleabilidad()));
-            return lista;
         }
+
+        // 2. Clasificar respuestas abiertas de empleadores (pregunta_id = 59) en las mismas 5 áreas (N = 79)
+        Map<String, Integer> empleadoresMap = new LinkedHashMap<>();
+        for (String key : tituladosMap.keySet()) empleadoresMap.put(key, 0);
+
+        int totalEmpleadores = 0;
+        String sqlEmp = "SELECT LOWER(TRIM(respuesta)) AS txt "
+                      + "FROM respuestas "
+                      + "WHERE pregunta_id = 59 AND respuesta IS NOT NULL AND TRIM(respuesta) <> ''";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlEmp);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                String txt = rs.getString("txt");
+                totalEmpleadores++;
+
+                if (txt.matches(".*(\\bia\\b|inteligencia artificial|inteligente artificial|machine learning|deep learning|agéntica|agentes|llm).*")) {
+                    empleadoresMap.put("IA", empleadoresMap.get("IA") + 1);
+                }
+                if (txt.matches(".*(software|desarrollo|programaci|arquitectura|cloud|nube|devops|web|móvil|movil|docker|kubernetes|git|qa|pruebas|testing|ágil|scrum).*")) {
+                    empleadoresMap.put("Ingenieria de Software", empleadoresMap.get("Ingenieria de Software") + 1);
+                }
+                if (txt.matches(".*(ciberseguridad|ciber seguridad|seguridad|redes|infraestructura|telecomunicaciones).*")) {
+                    empleadoresMap.put("Redes de Datos y Seguridad", empleadoresMap.get("Redes de Datos y Seguridad") + 1);
+                }
+                if (txt.matches(".*(base de datos|bases de datos|sql|nosql|big data|análisis de datos|analisis de datos|ciencia de datos|data|bi\\b|analítica).*")) {
+                    empleadoresMap.put("Base de Datos", empleadoresMap.get("Base de Datos") + 1);
+                }
+                if (txt.matches(".*(robótica|robotica|iot|internet de las cosas|embebidos|hardware).*")) {
+                    empleadoresMap.put("Robótica", empleadoresMap.get("Robótica") + 1);
+                }
+            }
+        }
+
+        // 3. Construir objeto cruzado sin ceros artificiales
+        for (String area : tituladosMap.keySet()) {
+            double pctEmp = totalEmpleadores > 0 ? Math.round((empleadoresMap.get(area) * 1000.0) / totalEmpleadores) / 10.0 : 0.0;
+            double pctTit = totalTitulados > 0 ? Math.round((tituladosMap.get(area) * 1000.0) / totalTitulados) / 10.0 : 0.0;
+            double empPond = Math.round(((pctEmp + pctTit) / 2.0) * 10.0) / 10.0;
+
+            AreaEmpleabilidad ae = new AreaEmpleabilidad();
+            ae.setArea(area);
+            ae.setDemandaEmpleador(pctEmp);
+            ae.setInteresTitulados(pctTit);
+            ae.setEmpleabilidad(empPond);
+            resultado.add(ae);
+        }
+
+        // Ordenar de mayor a menor empleabilidad
+        resultado.sort((a, b) -> Double.compare(b.getEmpleabilidad(), a.getEmpleabilidad()));
+        return resultado;
+    }
 
     // CHI-CUADRADO 
     private static double logGamma(double x) {
@@ -952,4 +991,121 @@ public class EncuestaDAO {
         out.put("chi2", rchi);
         return out;
     }
+    /**
+     * Cruce de 2 variables (HU 2): Nivel de Posgrado × Organización
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static List cruceNivelOrganizacion(int preguntaOrganizacionId) throws SQLException {
+        List lista = new ArrayList();
+        String sql = "SELECT "
+                   + "  TRIM(n.respuesta) AS nivel, "
+                   + "  TRIM(o.respuesta) AS organizacion, "
+                   + "  COUNT(*) AS total "
+                   + "FROM respuestas n "
+                   + "JOIN respuestas o ON " + claveEnvio("o") + " = " + claveEnvio("n") + " "
+                   + "WHERE n.pregunta_id = 4 "
+                   + "  AND o.pregunta_id = ? "
+                   + "  AND COALESCE(TRIM(n.respuesta),'') <> '' "
+                   + "  AND COALESCE(TRIM(o.respuesta),'') <> '' "
+                   + "GROUP BY TRIM(n.respuesta), TRIM(o.respuesta) "
+                   + "ORDER BY total DESC, nivel ASC, organizacion ASC";
+
+        int totalGeneral = 0;
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, preguntaOrganizacionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int cnt = rs.getInt("total");
+                    totalGeneral += cnt;
+                    Map fila = new LinkedHashMap();
+                    fila.put("nivel", rs.getString("nivel"));
+                    fila.put("organizacion", rs.getString("organizacion"));
+                    fila.put("total", cnt);
+                    lista.add(fila);
+                }
+            }
+        }
+
+        for (Object obj : lista) {
+            Map fila = (Map) obj;
+            int cnt = (Integer) fila.get("total");
+            fila.put("porcentaje", porcentaje(cnt, totalGeneral));
+        }
+        return lista;
+    }
+    /**
+     * Cruce de 2 variables (HU 2): Área de Interés × Nivel de Posgrado
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static List cruceAreaNivel() throws SQLException {
+        List lista = new ArrayList();
+        String sql = "SELECT "
+                   + "  TRIM(a.respuesta) AS area, "
+                   + "  TRIM(n.respuesta) AS nivel, "
+                   + "  COUNT(*) AS total "
+                   + "FROM respuestas a "
+                   + "JOIN respuestas n ON " + claveEnvio("n") + " = " + claveEnvio("a") + " "
+                   + "WHERE a.pregunta_id = 9 "
+                   + "  AND n.pregunta_id = 4 "
+                   + "  AND COALESCE(TRIM(a.respuesta),'') <> '' "
+                   + "  AND COALESCE(TRIM(n.respuesta),'') <> '' "
+                   + "GROUP BY TRIM(a.respuesta), TRIM(n.respuesta) "
+                   + "ORDER BY total DESC, area ASC, nivel ASC";
+
+        int totalGeneral = 0;
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int cnt = rs.getInt("total");
+                    totalGeneral += cnt;
+                    Map fila = new LinkedHashMap();
+                    fila.put("area", rs.getString("area"));
+                    fila.put("nivel", rs.getString("nivel"));
+                    fila.put("total", cnt);
+                    lista.add(fila);
+                }
+            }
+        }
+
+        for (Object obj : lista) {
+            Map fila = (Map) obj;
+            int cnt = (Integer) fila.get("total");
+            fila.put("porcentaje", porcentaje(cnt, totalGeneral));
+        }
+        return lista;
+    }
+
+    public static Map<String, Object> estadisticosAntiguedad(int preguntaId) throws SQLException {
+        Map<String, Object> stats = new LinkedHashMap<>();
+        String sql = "WITH datos AS ("
+                + "  SELECT CAST(TRIM(respuesta) AS NUMERIC) AS val "
+                + "  FROM respuestas "
+                + "  WHERE pregunta_id = ? AND TRIM(respuesta) ~ '^[0-9]+(\\.[0-9]+)?$'"
+                + ") "
+                + "SELECT "
+                + "  COUNT(*) AS n, "
+                + "  ROUND(AVG(val), 2) AS media, "
+                + "  ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY val)::NUMERIC, 2) AS mediana, "
+                + "  MODE() WITHIN GROUP (ORDER BY val) AS moda, "
+                + "  ROUND(STDDEV_SAMP(val), 2) AS desviacion "
+                + "FROM datos";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, preguntaId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    stats.put("n", rs.getInt("n"));
+                    stats.put("media", rs.getDouble("media"));
+                    stats.put("mediana", rs.getDouble("mediana"));
+                    stats.put("moda", rs.getDouble("moda"));
+                    stats.put("desviacion", rs.getDouble("desviacion"));
+                }
+            }
+        }
+        return stats;
+    }
+    
 }

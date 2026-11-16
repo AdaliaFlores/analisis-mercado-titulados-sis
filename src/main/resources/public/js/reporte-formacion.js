@@ -33,14 +33,12 @@
       </div>`);
 
     renderFormacionContinua(cont, d);
-    renderFinanciamiento(cont, d.financiamiento);
+    renderFinanciamiento(cont, d.financiamiento, d.nivelesFormacion);
     renderResumen(cont, d);
   };
 
   function renderFormacionContinua(cont, d) {
-    const areas = d.areasInteres || [];
     const alerta = d.alertaConcentracion;
-    const niveles = d.nivelesFormacion || [];
 
     // Alerta
     if (alerta) {
@@ -56,31 +54,50 @@
         </div>`);
     }
 
-    // Barras verticales áreas de interés
+    // --- CRUCE SUPERIOR: ÁREA DE INTERÉS × NIVEL DE POSGRADO (Gráfico + Tabla cruzada) ---
+    const cruceAreaNiv = d.cruceAreaNivel || [];
+    const areasUnicas = [...new Set(cruceAreaNiv.map(x => x.area))];
+    const nivelesAreaUnicos = [...new Set(cruceAreaNiv.map(x => x.nivel))];
+    const coloresArea = ['#0d6efd', '#0dcaf0', '#198754', '#ffc107', '#6f42c1'];
+
+    // 1. Gráfico centrado en la parte superior
     cont.insertAdjacentHTML('beforeend', `
-      <div class="col-lg-7">
+      <div class="col-lg-10 mx-auto">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <h6 class="fw-bold text-info">Áreas de interés o especialidad de posgrado (frecuencias y porcentajes)</h6>
-            <canvas id="graficoAreasInteres" height="200"></canvas>
-            <div class="small text-muted mt-2">Áreas de interés declaradas por el titulado. nᵢ = número de titulados que seleccionaron el área. % = fᵢ = (nᵢ / N) × 100.</div>
+            <h6 class="fw-bold text-info text-center mb-3">Áreas de interés × Nivel de posgrado deseado</h6>
+            <canvas id="graficoAreasInteres" height="115"></canvas>
+            <div class="small text-muted text-center mt-2">Distribución de titulados por especialidad y tipo de posgrado deseado (N = 105 respuestas completas).</div>
           </div>
         </div>
       </div>`);
 
-    // Tabla
+    // 2. Tabla cruzada dinámica debajo a todo lo ancho (sin scroll horizontal)
     cont.insertAdjacentHTML('beforeend', `
-      <div class="col-lg-5">
+      <div class="col-12 mt-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <h6 class="fw-bold text-info">Tabla de frecuencias · Áreas de interés</h6>
+            <h6 class="fw-bold text-info">Tabla cruzada · Área × Nivel</h6>
             <div class="table-responsive">
               <table class="table table-sm table-bordered text-center align-middle mb-0">
-                <thead class="table-light"><tr><th class="text-start">Área de interés</th><th>nᵢ</th><th>%</th></tr></thead>
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-start">Área de interés</th>
+                    ${nivelesAreaUnicos.map(n => `<th>${escapar(n)}</th>`).join('')}
+                    <th class="table-secondary">Total</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  ${areas.map(a => `
-                    <tr><td class="text-start">${escapar(a.area)}</td><td>${a.n}</td><td>${a.porcentaje}%</td></tr>
-                  `).join('') || '<tr><td colspan="3" class="text-muted">Sin datos</td></tr>'}
+                  ${areasUnicas.map(area => {
+                    let sumaFila = 0;
+                    const celdas = nivelesAreaUnicos.map(niv => {
+                      const found = cruceAreaNiv.find(x => x.area === area && x.nivel === niv);
+                      const val = found ? found.total : 0;
+                      sumaFila += val;
+                      return `<td>${val}</td>`;
+                    }).join('');
+                    return `<tr><td class="text-start fw-semibold">${escapar(area)}</td>${celdas}<td class="table-secondary fw-bold">${sumaFila}</td></tr>`;
+                  }).join('') || '<tr><td colspan="5" class="text-muted">Sin datos</td></tr>'}
                 </tbody>
               </table>
             </div>
@@ -88,27 +105,170 @@
         </div>
       </div>`);
 
-    if (areas.length) {
+    if (cruceAreaNiv.length) {
+      const datasetsArea = nivelesAreaUnicos.map((niv, idx) => ({
+        label: niv,
+        backgroundColor: coloresArea[idx % coloresArea.length],
+        data: areasUnicas.map(area => {
+          const found = cruceAreaNiv.find(x => x.area === area && x.nivel === niv);
+          return found ? found.total : 0;
+        })
+      }));
+
       charts.push(new Chart(document.getElementById('graficoAreasInteres'), {
         type: 'bar',
         data: {
-          labels: areas.map(a => a.area),
-          datasets: [
-            { label: 'Frecuencia nᵢ', data: areas.map(a => a.n), backgroundColor: '#0dcaf099' },
-            { label: 'Porcentaje %', data: areas.map(a => a.porcentaje), backgroundColor: '#0d6efd' }
-          ]
+          labels: areasUnicas,
+          datasets: datasetsArea
         },
         options: {
           scales: {
-            x: { ticks: { maxRotation: 40, minRotation: 30 } },
+            x: { ticks: { maxRotation: 35, minRotation: 20 } },
             y: { beginAtZero: true }
           },
-          plugins: { tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y + (c.datasetIndex === 1 ? '%' : '') } } }
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: c => `${c.dataset.label}: ${c.parsed.y} titulados`
+              }
+            }
+          }
         }
       }));
     }
 
-    // Nivel de formación deseado
+    // --- CRUCE DE 2 VARIABLES: NIVEL DE POSGRADO × ORGANIZACIÓN (Gráfico + Tabla sincronizados) ---
+    const cruce2 = d.cruceNivelOrg || [];
+    const nivelesUnicos = [...new Set(cruce2.map(x => x.nivel))];
+    const orgsUnicas = [...new Set(cruce2.map(x => x.organizacion))];
+
+    cont.insertAdjacentHTML('beforeend', `
+      <div class="col-12 mt-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+              <div>
+                <h6 class="fw-bold text-info mb-0">Preferencia institucional · Nivel de Posgrado × Organización</h6>
+                <div class="small text-muted">Distribución de dónde desean realizar su posgrado los titulados según el nivel elegido.</div>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <label for="filtroNivelCruce2" class="small text-muted mb-0">Filtrar Nivel:</label>
+                <select id="filtroNivelCruce2" class="form-select form-select-sm" style="width: auto;">
+                  <option value="TODOS">Todos los niveles</option>
+                  ${nivelesUnicos.map(n => `<option value="${escapar(n)}">${escapar(n)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+
+            <!-- Gráfico de barras encima -->
+            <div class="mb-4">
+              <canvas id="graficoNivelOrganizacion" height="110"></canvas>
+            </div>
+
+            <!-- Tabla compacta debajo -->
+            <div class="table-responsive">
+              <table class="table table-sm table-hover table-bordered align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Nivel de Posgrado</th>
+                    <th>Organización / Institución</th>
+                    <th class="text-center">Frecuencia (nᵢ)</th>
+                    <th class="text-center">%</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyCruce2"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>`);
+
+    // Lógica sincronizada para actualizar Gráfico y Tabla al cambiar el filtro
+    let chartNivelOrg = null;
+    const colores = ['#0d6efd', '#0dcaf0', '#198754', '#ffc107', '#6f42c1'];
+
+    const actualizarVistaCruce2 = (nivelSeleccionado) => {
+      // 1. Filtrar datos para la tabla
+      const filtrados = nivelSeleccionado === 'TODOS'
+        ? cruce2
+        : cruce2.filter(r => r.nivel === nivelSeleccionado);
+
+      const tbody = document.getElementById('tbodyCruce2');
+      tbody.innerHTML = filtrados.map(r => `
+        <tr>
+          <td><span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${escapar(r.nivel)}</span></td>
+          <td>${escapar(r.organizacion)}</td>
+          <td class="text-center fw-bold">${r.total}</td>
+          <td class="text-center">${r.porcentaje}%</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="text-center text-muted">Sin datos registrados para este cruce.</td></tr>';
+
+      // 2. Destruir gráfico anterior si existe y crear el nuevo filtrado
+      if (chartNivelOrg) {
+        chartNivelOrg.destroy();
+      }
+
+      if (!cruce2.length) return;
+
+      const nivelesAMostrar = nivelSeleccionado === 'TODOS' ? nivelesUnicos : [nivelSeleccionado];
+      const etiquetasOrg = nivelSeleccionado === 'TODOS'
+        ? orgsUnicas
+        : filtrados.map(x => x.organizacion);
+
+      const datasets = nivelesAMostrar.map((niv) => {
+        const idxColor = nivelesUnicos.indexOf(niv);
+        return {
+          label: niv,
+          backgroundColor: colores[idxColor % colores.length],
+          data: etiquetasOrg.map(org => {
+            const encontrado = cruce2.find(x => x.nivel === niv && x.organizacion === org);
+            return encontrado ? encontrado.total : 0;
+          })
+        };
+      });
+
+      chartNivelOrg = new Chart(document.getElementById('graficoNivelOrganizacion'), {
+        type: 'bar',
+        data: {
+          labels: etiquetasOrg,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { ticks: { maxRotation: 25, minRotation: 15 } },
+            y: { beginAtZero: true, ticks: { stepSize: 5 } }
+          },
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} titulados`
+              }
+            }
+          }
+        }
+      });
+
+      charts.push(chartNivelOrg);
+    };
+
+    // Inicializar vista completa y activar evento de cambio
+    actualizarVistaCruce2('TODOS');
+    document.getElementById('filtroNivelCruce2').addEventListener('change', (e) => {
+      actualizarVistaCruce2(e.target.value);
+    });
+  }
+
+  function renderFinanciamiento(cont, fin, niveles) {
+    const chi2 = fin.chi2 || {};
+    const filas = fin.filas || [];
+    const columnas = fin.columnas || [];
+    const celdas = fin.celdas || [];
+    const tieneDatos = fin.tieneDatos;
+
+    // Nivel de formación deseado · Frecuencias (unido con la matriz de financiamiento)
     cont.insertAdjacentHTML('beforeend', `
       <div class="col-12 mt-3">
         <div class="card border-0 shadow-sm">
@@ -128,14 +288,6 @@
           </div>
         </div>
       </div>`);
-  }
-
-  function renderFinanciamiento(cont, fin) {
-    const chi2 = fin.chi2 || {};
-    const filas = fin.filas || [];
-    const columnas = fin.columnas || [];
-    const celdas = fin.celdas || [];
-    const tieneDatos = fin.tieneDatos;
 
     const valor = (f, c) => {
       const cel = celdas.find(x => x.valorX === f && x.valorY === c);
@@ -206,6 +358,9 @@
           <div class="card border-0 shadow-sm">
             <div class="card-body">
               <h6 class="fw-bold text-secondary">Diagnóstico estadístico · Chi-cuadrado (χ²)</h6>
+              <div class="small text-muted mb-3">
+                Evalua si el nivel de posgrado deseado depende de la fuente de financiamiento (recursos propios o beca), permitiendo determinar si las diferencias en la tabla responden a una relación real o únicamente al azar.
+              </div>
               <div class="row g-3 mt-1">
                 <div class="col-md-3">
                   <div class="border rounded p-2 h-100">
