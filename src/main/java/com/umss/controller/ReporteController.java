@@ -137,32 +137,22 @@ public class ReporteController {
             // Áreas con mayor empleabilidad
             r.put("areasEmpleabilidad", EncuestaDAO.analisisEmpleabilidad());
 
-            // Oferta con poca demanda
+            // Cargar TODAS las razones de desempleo completas (las 7 razones)
             List<ConteoRespuesta> razones = EncuestaDAO.contarRespuestas(28);
-            List<ConteoRespuesta> criticas = new ArrayList<>();
-            for (ConteoRespuesta c : razones) {
-                String v = c.getRespuesta() == null ? "" : c.getRespuesta().toLowerCase();
-                if (v.contains("demanda laboral inexistente") || v.contains("remuneracion muy baja") || v.contains("remuneración muy baja")) {
-                    criticas.add(c);
-                }
-            }
-            if (criticas.isEmpty() && razones.size() > 5) {
-                criticas.addAll(razones.subList(0, 5));
-            } else if (criticas.isEmpty()) {
-                criticas.addAll(razones);
-            }
-            r.put("razonesCriticas", criticas);
+            r.put("razones", razones);
+            r.put("razonesCriticas", razones);
 
-            //Asignaturas de poca utilidad
+            // Asignaturas de poca utilidad
             List<ConteoRespuesta> asignaturasPoca = EncuestaDAO.asignaturasFrecuencia(44);
-            if (asignaturasPoca.size() > 10) asignaturasPoca = asignaturasPoca.subList(0, 10);
+            //if (asignaturasPoca.size() > 10) asignaturasPoca = asignaturasPoca.subList(0, 10);
             r.put("asignaturasPocaUtilidadTop", asignaturasPoca);
 
             // Rubros/sectores sin contratación prevista 
             List<ConteoRespuesta> contratacion = EncuestaDAO.contarRespuestas(55);
             r.put("contratacionEmpleador", contratacion);
             r.put("rubroEmpleador", EncuestaDAO.contarRespuestas(53));
-
+            // Estadísticos descriptivos de antigüedad profesional (n=181)
+            r.put("estadisticosAntiguedad", EncuestaDAO.estadisticosAntiguedad(12));
             ctx.json(r);
         } catch (Exception e) {
             e.printStackTrace();
@@ -179,7 +169,8 @@ public class ReporteController {
             r.put("areasInteres", areas);
             r.put("alertaConcentracion", EncuestaDAO.alertaConcentracionCritica(areas));
             r.put("nivelesFormacion", EncuestaDAO.nivelesFormacionDeseados());
-
+            r.put("cruceNivelOrg", EncuestaDAO.cruceNivelOrganizacion(10));
+            r.put("cruceAreaNivel", EncuestaDAO.cruceAreaNivel());
             // Financiamiento
             Map<String, Object> fin = EncuestaDAO.tablaFinanciamiento();
             r.put("financiamiento", fin);

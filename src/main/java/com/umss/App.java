@@ -1,7 +1,9 @@
-
 package com.umss;
 
+import java.util.Map;
+
 import com.umss.controller.AnalisisController;
+import com.umss.controller.AuthController;
 import com.umss.controller.EncuestaController;
 import com.umss.controller.EnvioController;
 import com.umss.controller.ExportController;
@@ -21,8 +23,51 @@ public class App {
 
         var app = Javalin.create(config -> {
             config.staticFiles.add("/public");
+            // Mitigación CSRF: evita que sitios externos envíen cookies de sesión
+            config.jetty.modifyServletContextHandler(handler -> {
+                handler.getSessionHandler().getSessionCookieConfig().setHttpOnly(true);
+                handler.getSessionHandler().setSameSite(org.eclipse.jetty.http.HttpCookie.SameSite.LAX);
+            });
         });
 
+        // ==========================================================
+        // 1. GUARDIA DE SEGURIDAD (Protege vistas y APIs privadas)
+        // ==========================================================
+        app.before(ctx -> {
+            String path = ctx.path();
+            String metodo = ctx.method().name();
+
+            // Páginas HTML exclusivas del administrador
+            boolean esPaginaPrivada = path.equals("/dashboard.html") 
+                                   || path.equals("/previsualizacion.html");
+
+            // Endpoints de la API exclusivos del administrador
+            boolean esApiPrivada = path.startsWith("/api/reportes")
+                                || path.startsWith("/api/export")
+                                || path.startsWith("/api/analisis")
+                                || path.startsWith("/api/import")
+                                || path.startsWith("/api/envios")
+                                || path.endsWith("/envios") // protege /api/encuestas/{id}/envios
+                                || (path.startsWith("/api/respuestas/") && metodo.equals("PUT"));
+
+            if ((esPaginaPrivada || esApiPrivada) && !AuthController.estaAutenticado(ctx)) {
+                if (path.startsWith("/api/")) {
+                    ctx.status(401).json(Map.of("error", "No autorizado. Inicie sesión."));
+                } else {
+                    ctx.redirect("/login.html");
+                }
+            }
+        });
+
+        // ==========================================================
+        // 2. RUTAS DE AUTENTICACIÓN (Login / Logout)
+        // ==========================================================
+        AuthController.registrarRutas(app);
+
+        // ==========================================================
+        // 3. TUS RUTAS ACTUALES (Sin modificaciones)
+        // ==========================================================
+        
         // Verificación de disponibilidad del servidor
         app.get("/health", ctx -> ctx.result("OK"));
 
@@ -102,9 +147,9 @@ public class App {
 
         app.post("/api/import/excel/empleadores",
             EncuestaController::importarExcelEmpleadores);
-        app.get("/api/reportes/emprendimiento/resumen",
 
-        ReporteController::reporteEmprendimientoResumen);
+        app.get("/api/reportes/emprendimiento/resumen",
+            ReporteController::reporteEmprendimientoResumen);
 
         // Iniciar servidor en el puerto proporcionado por Render
         app.start("0.0.0.0", port);

@@ -15,15 +15,27 @@
 
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm">
         <div class="container" style="max-width: 1400px;">
-            <a class="navbar-brand fw-bold" href="/index.html">UMSS Encuestas</a>
+            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/index.html">
+            <img src="/img/umss.png" alt="Logo UMSS" height="32" class="d-inline-block align-text-top bg-white p-1 rounded">
+            <span>Herramienta de Recolección de Datos</span>
+        </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link fw-semibold" href="/index.html">Responder Encuesta</a></li>
-                    <li class="nav-item"><a class="nav-link fw-semibold" href="/dashboard.html">Dashboard / Reportes</a></li>
-                    <li class="nav-item"><a class="nav-link active fw-semibold" href="/previsualizacion.html">Respuestas</a></li>
+                    <li class="nav-item">
+                        <a class="nav-link fw-semibold" href="/index.html">Encuestas</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link fw-semibold" href="/dashboard.html">Reportes</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active fw-semibold" href="/previsualizacion.html">Respuestas</a>
+                    </li>
+                    <li class="nav-item ms-lg-3">
+                        <button onclick="cerrarSesion()" class="btn btn-outline-light btn-sm mt-1">Cerrar Sesión</button>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -80,7 +92,12 @@
             </div>
         </div>
     </div>
-
+    <script>
+      async function cerrarSesion() {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/index.html';
+      }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/js/components.js"></script>
     <script src="/js/previsualizacion.js"></script>

@@ -30,11 +30,36 @@
         = (Demanda empleador + Interés de titulados) / 2.
       </div>
     </div>`);
-
+    renderEstadisticosAntiguedad(cont, d.estadisticosAntiguedad); 
     renderEmpleabilidadBarras(cont, d.areasEmpleabilidad);
     renderPocaDemandaEjes(cont, d);
     renderResumen(cont, d);
   };
+  function renderEstadisticosAntiguedad(cont, st) {
+    if (!st || !st.n) return;
+    const kpi = (titulo, valor, sub, color) => `
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center py-2">
+            <div class="fs-4 fw-bold text-${color}">${valor}</div>
+            <div class="small fw-semibold">${titulo}</div>
+            ${sub ? `<div class="text-muted" style="font-size: 0.75rem;">${sub}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+
+    cont.insertAdjacentHTML('beforeend', `
+      <div class="col-12">
+        <h6 class="fw-bold text-primary mb-1">Estadísticos de Antigüedad Profesional</h6>
+        <p class="text-muted small mb-2">Medidas de tendencia central y dispersión calculadas sobre ${st.n} titulados válidos.</p>
+        <div class="row g-3">
+          ${kpi('Media', st.media + ' años', '', 'primary')}
+          ${kpi('Mediana', st.mediana + ' años', '', 'info')}
+          ${kpi('Moda', st.moda + ' año', 'Valor más frecuente', 'success')}
+          ${kpi('Desv. Estándar', st.desviacion + ' años', '', 'secondary')}
+        </div>
+      </div>`);
+  }
 
   // Barras verticales: Áreas con mayor empleabilidad
   function renderEmpleabilidadBarras(cont, areas) {
@@ -94,8 +119,8 @@
 
   // Eje cartesiano / vista agrupada: Oferta con poca demanda
   function renderPocaDemandaEjes(cont, d) {
-    const criticas = (d.razonesCriticas || []).slice(0, 6);
-    const asign = (d.asignaturasPocaUtilidadTop || []).slice(0, 6);
+    const criticas = d.razones || d.motivosDesempleo || d.razonesDesempleo || (d.razonesCriticas || []);
+    const asign = d.asignaturasPocaUtilidadTop || [];
     const contr = (d.contratacionEmpleador || []).slice(0, 5);
 
     cont.insertAdjacentHTML('beforeend', `
@@ -174,7 +199,7 @@
               <table class="table table-sm table-bordered text-center align-middle mb-0">
                 <thead class="table-light"><tr><th class="text-start">Razón</th><th>Total</th><th>%</th></tr></thead>
                 <tbody>
-                  ${(criticas.length ? criticas : (d.razonesCriticas||[]).slice(0,5)).map(c => `
+                  ${(criticas).map(c => `
                     <tr><td class="text-start">${escapar(c.respuesta)}</td><td>${c.total}</td><td>${c.porcentaje}%</td></tr>
                   `).join('')}
                 </tbody>
