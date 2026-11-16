@@ -56,6 +56,8 @@ public final class CalculadoraEmprendimiento {
             long spinOff,
             long startUp,
             long ideaPropia,
+            String topOrigen,  
+            long topOrigenTotal,
             String topEntregable,
             long topEntregableTotal,
             int totalEntregable,
@@ -98,6 +100,13 @@ public final class CalculadoraEmprendimiento {
         }
         int totalEntregable = suma(d31);
 
+                // Buscar la opción con mayor conteo absoluto en p30 (Origen)
+        ConteoRespuesta top30 = null;
+        for (ConteoRespuesta c : d30) {
+            if (top30 == null || c.getTotal() > top30.getTotal()) {
+                top30 = c;
+            }
+        }
         int totalFinanciamiento = suma(d32);
         long externo = 0;
         for (ConteoRespuesta c : d32) {
@@ -113,6 +122,8 @@ public final class CalculadoraEmprendimiento {
         return new Metricas(
                 universo,
                 spinOff, startUp, ideaPropia,
+                top30 == null ? null : top30.getRespuesta(), // 👈 NUEVO: topOrigen
+                top30 == null ? 0 : top30.getTotal(),         // 👈 NUEVO: topOrigenTotal
                 top31 == null ? null : top31.getRespuesta(),
                 top31 == null ? 0 : top31.getTotal(),
                 totalEntregable,
@@ -179,20 +190,19 @@ public final class CalculadoraEmprendimiento {
         out.add("Universo analizado: " + m.universo() + " emprendimiento(s) registrados por los titulados.");
 
         StringBuilder origen = new StringBuilder();
-        if (m.spinOff() > 0) {
-            origen.append("Spin Off ").append(pct(m.spinOff(), m.universo())).append("% · ");
-        }
         if (m.ideaPropia() > 0) {
             origen.append("Idea propia ").append(pct(m.ideaPropia(), m.universo())).append("% · ");
         }
+        if (m.spinOff() > 0) {
+            origen.append("Spin Off ").append(pct(m.spinOff(), m.universo())).append("% · ");
+        }
         if (m.startUp() > 0) {
-            origen.append("StartUp ").append(pct(m.startUp(), m.universo())).append("%");
+            origen.append("StartUp ").append(pct(m.startUp(), m.universo())).append("% · ");
         }
         String detalle = origen.toString().replaceAll(" · $", "");
         if (!detalle.isEmpty()) {
-            String predominante = m.spinOff() >= m.startUp()
-                    ? "Predomina la iniciativa derivada de proyectos universitarios (Spin Off)."
-                    : "Predomina la StartUp.";
+            String nombreTop = (m.topOrigen() != null) ? m.topOrigen() : "N/A";
+            String predominante = "Predomina: " + nombreTop + " (" + m.topOrigenTotal() + " de " + m.universo() + ", " + pct(m.topOrigenTotal(), m.universo()) + "%).";
             out.add("Origen: " + detalle + ". " + predominante);
         }
 
