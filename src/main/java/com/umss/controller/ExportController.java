@@ -5,6 +5,7 @@ import com.umss.dao.EncuestaDAO;
 import com.umss.dao.ReporteHu12DAO;
 import com.umss.model.*;
 import com.umss.util.CalculadoraEmprendimiento;
+import com.umss.util.CalculadoraDesempleo;
 import com.umss.util.PruebaChiCuadrado;
 import io.javalin.http.Context;
 import org.apache.poi.ss.usermodel.*;
@@ -341,51 +342,10 @@ public class ExportController {
                         .append(DF2.format(d.getBrecha())).append("\r\n");
                     }
                 }
-                case "emprendimiento" -> {
-                    @SuppressWarnings("unchecked")
-                    List<ConteoRespuesta> filasEmp = EncuestaDAO.obtenerConteoEmprendimiento();
-                    if (filasEmp == null) filasEmp = Collections.emptyList();
-                    Map<Integer, List<ConteoRespuesta>> porPreg = new LinkedHashMap<>();
-                    for (ConteoRespuesta f : filasEmp) {
-                        porPreg.computeIfAbsent(f.getPreguntaId(), k -> new ArrayList<>()).add(f);
-                    }
-                    sb.append("=== ECOSISTEMA DE EMPRENDIMIENTO E INNOVACIÓN ===\r\n\r\n");
-                    appendSeccionEmpCsv(sb, 30, "Origen del emprendimiento (p30)", porPreg);
-                    appendSeccionEmpCsv(sb, 31, "Tipo de entregable (p31)", porPreg);
-                    appendSeccionEmpCsv(sb, 32, "Financiamiento externo (p32)", porPreg);
-                    appendSeccionEmpCsv(sb, 33, "Satisfacción con el rendimiento (p33)", porPreg);
-                    appendSeccionEmpCsv(sb, 34, "Importancia de la formación (p34)", porPreg);
-                    // Comparativo
-                    List<ConteoRespuesta> d30 = porPreg.getOrDefault(30, new ArrayList<>());
-                    ConteoRespuesta spin = null, start = null;
-                    for (ConteoRespuesta cp : d30) {
-                        String r = cp.getRespuesta() == null ? "" : cp.getRespuesta().toLowerCase();
-                        if (r.contains("spin")) spin = cp;
-                        if (r.contains("start")) start = cp;
-                    }
-                    sb.append("=== COMPARATIVO: SPIN-OFFS VS STARTUPS (p30) ===\r\n");
-                    sb.append("CATEGORIA,TOTAL\r\n");
-                    sb.append("Spin Off,").append(spin == null ? 0 : spin.getTotal()).append("\r\n");
-                    sb.append("StartUp,").append(start == null ? 0 : start.getTotal()).append("\r\n");
-                    sb.append("\r\n=== RESUMEN Y RECOMENDACIÓN ===\r\n");
-                    for (String b : resumenEmprendimientoBullets(porPreg)) sb.append(csv(b)).append("\r\n");
-                    sb.append("\r\nRECOMENDACIONES PARA EL PLAN DE DESARROLLO ESTRATÉGICO\r\n");
-                    for (String r : resumenEmprendimientoRecomendaciones(porPreg)) sb.append(csv(r)).append("\r\n");
-                }
-                case "desempleo" -> {
-                    sb.append("=== DESEMPLEO Y BARRERAS ===\r\n\r\n");
-                    sb.append("=== MATRIZ DE FRECUENCIA CRUZADA: RAZONES PARA CONTINUAR DESEMPLEADO (p28) × EXPERIENCIA ANTERIOR (p29) ===\r\n");
-                    sb.append("RAZON_PARA_CONTINUAR_DESEMPLEADO,EXPERIENCIA_ANTERIOR_EN_EL_SECTOR,TOTAL\r\n");
-                    for (CeldaCruce cc : EncuestaDAO.obtenerCruce(28, 29)) {
-                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
-                    }
-                    sb.append("\r\n");
-                    sb.append("=== MATRIZ DE FRECUENCIA CRUZADA: TIEMPO HASTA EL PRIMER EMPLEO (p36) × NÚMERO DE EMPLEOS (p37) ===\r\n");
-                    sb.append("TIEMPO_HASTA_PRIMER_EMPLEO,CANTIDAD_DE_EMPLEOS_OBTENIDOS,TOTAL\r\n");
-                    for (CeldaCruce cc : EncuestaDAO.obtenerCruce(36, 37)) {
-                        sb.append(csv(cc.getValorX())).append(",").append(csv(cc.getValorY())).append(",").append(cc.getTotal()).append("\r\n");
-                    }
-                }
+                case "emprendimiento" -> appendAnalisisEmprendimientoCsv(sb,
+                        CalculadoraEmprendimiento.analisisExploratorio(
+                                EncuestaDAO.obtenerRegistrosEmprendimiento()));
+                case "desempleo" -> appendAnalisisDesempleoCsv(sb, analisisDesempleo());
                 case "formacion" -> {
                     sb.append("=== FORMACIÓN CONTINUA Y MECANISMOS DE FINANCIAMIENTO ===\r\n\r\n");
 
@@ -597,6 +557,186 @@ public class ExportController {
         for (ConteoRespuesta cp : lista) {
             double pct = total == 0 ? 0.0 : (cp.getTotal() * 100.0 / (double) total);
             sb.append(csv(cp.getRespuesta())).append(",").append(cp.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
+        }
+        sb.append("\r\n");
+    }
+
+    private static void appendAnalisisEmprendimientoCsv(
+            StringBuilder sb,
+            CalculadoraEmprendimiento.AnalisisExploratorio analisis) {
+        sb.append("=== ECOSISTEMA DE EMPRENDIMIENTO E INNOVACIÓN ===\r\n");
+        sb.append("=== ANÁLISIS EXPLORATORIO ===\r\n\r\n");
+        sb.append("CASOS CON LAS TRES RESPUESTAS,").append(analisis.completos()).append("\r\n");
+        sb.append("CASOS INCOMPLETOS,").append(analisis.incompletos()).append("\r\n\r\n");
+
+        appendFrecuenciaEmpCsv(sb, "ORIGEN DEL EMPRENDIMIENTO (p30)", analisis.origen());
+        appendFrecuenciaEmpCsv(sb, "TIPO DE ENTREGABLE (p31)", analisis.entregable());
+        appendFrecuenciaEmpCsv(sb, "FINANCIAMIENTO (p32)", analisis.financiamiento());
+
+        appendTablaCruceEmpCsv(sb, "ORIGEN × TIPO DE ENTREGABLE",
+                analisis.origenEntregable(), "ORIGEN", "TIPO DE ENTREGABLE", true);
+        appendTablaCruceEmpCsv(sb, "ORIGEN × FINANCIAMIENTO",
+                analisis.origenFinanciamiento(), "ORIGEN", "FINANCIAMIENTO", true);
+        appendTablaCruceEmpCsv(sb, "TIPO DE ENTREGABLE × FINANCIAMIENTO",
+                analisis.entregableFinanciamiento(), "TIPO DE ENTREGABLE", "FINANCIAMIENTO", true);
+
+        for (CalculadoraEmprendimiento.BloqueFinanciamiento bloque : analisis.bloques()) {
+            appendTablaCruceEmpCsv(sb,
+                    "ORIGEN × TIPO DE ENTREGABLE | " + bloque.financiamiento(),
+                    bloque.tabla(), "ORIGEN", "TIPO DE ENTREGABLE", false);
+        }
+
+        if (!analisis.resumen().isEmpty()) {
+            sb.append("=== RESUMEN ===\r\n");
+            for (String linea : analisis.resumen()) {
+                sb.append(csv(linea)).append("\r\n");
+            }
+            sb.append("\r\n");
+        }
+    }
+
+    private static void appendAnalisisDesempleoCsv(
+            StringBuilder sb,
+            CalculadoraDesempleo.AnalisisDesempleo analisis) {
+        sb.append("=== DESEMPLEO Y BARRERAS DE INSERCIÓN LABORAL ===\r\n");
+        sb.append("=== ANÁLISIS EXPLORATORIO ===\r\n\r\n");
+        sb.append("ENVÍOS,").append(analisis.total()).append("\r\n");
+        sb.append("CASOS CON LAS TRES VARIABLES,").append(analisis.conTresVariables()).append("\r\n\r\n");
+
+        appendFrecuenciaDesempCsv(sb, "SITUACIÓN LABORAL ACTUAL (p14)", analisis.situacion());
+        appendFrecuenciaDesempCsv(sb, "TIEMPO TOTAL DE DESEMPLEO EN AÑOS (p13)", analisis.tiempoDesempleo());
+        appendFrecuenciaDesempCsv(sb, "RAZÓN POR LA QUE NO TRABAJA (p28)", analisis.razon());
+        appendFrecuenciaDesempCsv(sb, "AÑOS HASTA EL PRIMER EMPLEO (p36)", analisis.primerEmpleo());
+        appendFrecuenciaDesempCsv(sb, "AÑOS DE VIDA PROFESIONAL (p12)", analisis.vidaProfesional());
+
+        appendTablaCruceDesempCsv(sb, "SITUACIÓN LABORAL × TIEMPO DE DESEMPLEO",
+                analisis.situacionTiempo(), "SITUACIÓN LABORAL", "TIEMPO DE DESEMPLEO", true);
+        appendTablaCruceDesempCsv(sb, "MATRIZ DE BARRERAS: RAZÓN DE NO TRABAJAR × EXPERIENCIA PREVIA",
+                analisis.razonExperiencia(), "RAZÓN", "EXPERIENCIA PREVIA", true);
+        appendTablaCruceDesempCsv(sb, "RAZÓN DE NO TRABAJAR × AÑOS HASTA EL PRIMER EMPLEO",
+                analisis.razonPrimerEmpleo(), "RAZÓN", "AÑOS HASTA EL PRIMER EMPLEO", true);
+        appendTablaCruceDesempCsv(sb, "RAZÓN DE NO TRABAJAR × AÑOS DE VIDA PROFESIONAL",
+                analisis.razonVidaProfesional(), "RAZÓN", "AÑOS DE VIDA PROFESIONAL", true);
+
+        for (CalculadoraDesempleo.BloqueRazon bloque : analisis.bloques()) {
+            appendTablaCruceDesempCsv(sb,
+                    "ORIGEN DEL BLOQUE: " + bloque.razon(),
+                    bloque.tabla(), "AÑOS HASTA EL PRIMER EMPLEO", "AÑOS DE VIDA PROFESIONAL", false);
+        }
+
+        for (CalculadoraDesempleo.DemandaEmpleador demanda : analisis.demandas()) {
+            sb.append("=== DEMANDA DEL EMPLEADOR: ").append(demanda.titulo().toUpperCase()).append(" (n=")
+                    .append(demanda.total()).append(") ===\r\n");
+            sb.append("PALABRA_CLAVE,n,%\r\n");
+            for (ConteoPalabra p : demanda.palabras()) {
+                sb.append(csv(p.getPalabra())).append(",").append(p.getTotal()).append(",")
+                        .append(DF2.format(p.getPorcentaje())).append("\r\n");
+            }
+            sb.append("\r\n");
+        }
+
+        if (!analisis.resumen().isEmpty()) {
+            sb.append("=== RESUMEN ===\r\n");
+            for (String linea : analisis.resumen()) {
+                sb.append(csv(linea)).append("\r\n");
+            }
+            sb.append("\r\n");
+        }
+    }
+
+    private static void appendFrecuenciaDesempCsv(
+            StringBuilder sb,
+            String titulo,
+            List<CalculadoraDesempleo.Frecuencia> lista) {
+        int total = 0;
+        for (CalculadoraDesempleo.Frecuencia f : lista) total += f.total();
+        sb.append("=== ").append(titulo).append(" (n=").append(total).append(") ===\r\n");
+        sb.append("RESPUESTA,n,%\r\n");
+        for (CalculadoraDesempleo.Frecuencia f : lista) {
+            sb.append(csv(f.etiqueta())).append(",").append(f.total()).append(",")
+                    .append(DF2.format(f.porcentaje())).append("\r\n");
+        }
+        sb.append(csv("Total")).append(",").append(total).append(",100.0\r\n\r\n");
+    }
+
+    private static void appendTablaCruceDesempCsv(
+            StringBuilder sb,
+            String titulo,
+            CalculadoraDesempleo.TablaCruce tabla,
+            String etiquetaFila,
+            String etiquetaColumna,
+            boolean porcentajeFila) {
+        sb.append("=== ").append(titulo).append(" (n=").append(tabla.total()).append(") ===\r\n");
+        sb.append(csv(etiquetaFila)).append(",").append(csv(etiquetaColumna))
+                .append(",n,%\r\n");
+        for (int i = 0; i < tabla.filas().size(); i++) {
+            for (int j = 0; j < tabla.columnas().size(); j++) {
+                int valor = tabla.celdas().get(i).get(j);
+                int denominador = porcentajeFila ? tabla.totalesFila().get(i) : tabla.total();
+                sb.append(csv(tabla.filas().get(i))).append(",")
+                        .append(csv(tabla.columnas().get(j))).append(",")
+                        .append(valor).append(",")
+                        .append(DF2.format(pctDe(valor, denominador))).append("\r\n");
+            }
+        }
+        sb.append("\r\n");
+    }
+
+    private static CalculadoraDesempleo.AnalisisDesempleo analisisDesempleo() throws Exception {
+        List<ConteoPalabra> tendencias = EncuestaDAO.contarPalabrasClave(59);
+        List<ConteoPalabra> herramientas = EncuestaDAO.contarPalabrasClave(60);
+        List<ConteoPalabra> competencias = EncuestaDAO.contarPalabrasClave(61);
+
+        List<CalculadoraDesempleo.DemandaEmpleador> demandas = List.of(
+                new CalculadoraDesempleo.DemandaEmpleador(
+                        "Tendencias emergentes",
+                        EncuestaDAO.obtenerRespuestasTexto(59).size(),
+                        tendencias),
+                new CalculadoraDesempleo.DemandaEmpleador(
+                        "Herramientas tecnológicas",
+                        EncuestaDAO.obtenerRespuestasTexto(60).size(),
+                        herramientas),
+                new CalculadoraDesempleo.DemandaEmpleador(
+                        "Competencias fundamentales",
+                        EncuestaDAO.obtenerRespuestasTexto(61).size(),
+                        competencias));
+
+        return CalculadoraDesempleo.analisis(
+                EncuestaDAO.obtenerRegistrosDesempleo(), demandas);
+    }
+
+    private static void appendFrecuenciaEmpCsv(
+            StringBuilder sb,
+            String titulo,
+            List<CalculadoraEmprendimiento.Frecuencia> lista) {
+        sb.append("=== ").append(titulo).append(" ===\r\n");
+        sb.append("RESPUESTA,TOTAL,%\r\n");
+        for (CalculadoraEmprendimiento.Frecuencia f : lista) {
+            sb.append(csv(f.etiqueta())).append(",").append(f.total()).append(",")
+                    .append(DF2.format(f.porcentaje())).append("\r\n");
+        }
+        sb.append("\r\n");
+    }
+
+    private static void appendTablaCruceEmpCsv(
+            StringBuilder sb,
+            String titulo,
+            CalculadoraEmprendimiento.TablaCruce tabla,
+            String etiquetaFila,
+            String etiquetaColumna,
+            boolean porcentajeFila) {
+        sb.append("=== ").append(titulo).append(" ===\r\n");
+        sb.append(csv(etiquetaFila)).append(",").append(csv(etiquetaColumna))
+                .append(",TOTAL,%\r\n");
+        for (int i = 0; i < tabla.filas().size(); i++) {
+            for (int j = 0; j < tabla.columnas().size(); j++) {
+                int valor = tabla.celdas().get(i).get(j);
+                int denominador = porcentajeFila ? tabla.totalesFila().get(i) : tabla.total();
+                sb.append(csv(tabla.filas().get(i))).append(",")
+                        .append(csv(tabla.columnas().get(j))).append(",")
+                        .append(valor).append(",")
+                        .append(DF2.format(pctDe(valor, denominador))).append("\r\n");
+            }
         }
         sb.append("\r\n");
     }
@@ -1103,85 +1243,75 @@ public class ExportController {
                             "ASIGNATURA (p44) × RAZÓN DE INACTIVIDAD (p28)", EncuestaDAO.cruceAsignaturaVariable(44, 28));
                 }
                 case "emprendimiento" -> {
-                    @SuppressWarnings("unchecked")
-                    List<ConteoRespuesta> filasEmp = EncuestaDAO.obtenerConteoEmprendimiento();
-                    if (filasEmp == null) filasEmp = Collections.emptyList();
-                    Map<Integer, List<ConteoRespuesta>> porPreg = new LinkedHashMap<>();
-                    for (ConteoRespuesta f : filasEmp) porPreg.computeIfAbsent(f.getPreguntaId(), k -> new ArrayList<>()).add(f);
-                    rowIdx++;
-                    addEmpSheetBlock(sh, rowIdx, 30, "Origen del emprendimiento (p30)", porPreg, headerStyle);
-                    rowIdx += countBlock(porPreg.getOrDefault(30, new ArrayList<>())) + 2;
-                    addEmpSheetBlock(sh, rowIdx, 31, "Tipo de entregable (p31)", porPreg, headerStyle);
-                    rowIdx += countBlock(porPreg.getOrDefault(31, new ArrayList<>())) + 2;
-                    addEmpSheetBlock(sh, rowIdx, 32, "Financiamiento externo (p32)", porPreg, headerStyle);
-                    rowIdx += countBlock(porPreg.getOrDefault(32, new ArrayList<>())) + 2;
-                    addEmpSheetBlock(sh, rowIdx, 33, "Satisfacción con el rendimiento (p33)", porPreg, headerStyle);
-                    rowIdx += countBlock(porPreg.getOrDefault(33, new ArrayList<>())) + 2;
-                    addEmpSheetBlock(sh, rowIdx, 34, "Importancia de la formación (p34)", porPreg, headerStyle);
-                    rowIdx += countBlock(porPreg.getOrDefault(34, new ArrayList<>())) + 2;
-                    // Comparativo
-                    List<ConteoRespuesta> d30 = porPreg.getOrDefault(30, new ArrayList<>());
-                    ConteoRespuesta spin = null, start = null;
-                    for (ConteoRespuesta cp : d30) {
-                        String r = cp.getRespuesta() == null ? "" : cp.getRespuesta().toLowerCase();
-                        if (r.contains("spin")) spin = cp;
-                        if (r.contains("start")) start = cp;
+                    CalculadoraEmprendimiento.AnalisisExploratorio analisis =
+                            CalculadoraEmprendimiento.analisisExploratorio(
+                                    EncuestaDAO.obtenerRegistrosEmprendimiento());
+                    LayoutEmprendimientoExcel layout = layoutEmprendimientoExcel(analisis);
+
+                    Row titulo = sh.createRow(2);
+                    titulo.createCell(0).setCellValue(
+                            "ANÁLISIS EXPLORATORIO - " + analisis.completos() + " casos con las tres respuestas");
+                    styleRow(titulo, headerStyle);
+
+                    Row rFrec = sh.createRow(3);
+                    rFrec.createCell(0).setCellValue("1. FRECUENCIAS");
+                    styleRow(rFrec, headerStyle);
+
+                    escribirFrecuenciaExcel(sh, layout.origenTitulo(), layout.origenHeader(),
+                            layout.origenInicio(), "Origen del emprendimiento (p30)",
+                            analisis.origen(), headerStyle);
+                    escribirFrecuenciaExcel(sh, layout.entregableTitulo(), layout.entregableHeader(),
+                            layout.entregableInicio(), "Tipo de entregable (p31)",
+                            analisis.entregable(), headerStyle);
+                    escribirFrecuenciaExcel(sh, layout.financiamientoTitulo(), layout.financiamientoHeader(),
+                            layout.financiamientoInicio(), "Financiamiento (p32)",
+                            analisis.financiamiento(), headerStyle);
+
+                    Row rCruces = sh.createRow(layout.inicioCruces());
+                    rCruces.createCell(0).setCellValue("2. CRUCES DE DOS VARIABLES");
+                    styleRow(rCruces, headerStyle);
+
+                    int fila = layout.inicioCruces() + 1;
+                    fila = escribirTablaCruceExcel(sh, fila, headerStyle,
+                            "ORIGEN × TIPO DE ENTREGABLE",
+                            analisis.origenEntregable(), "ORIGEN", true) + 1;
+                    fila = escribirTablaCruceExcel(sh, fila, headerStyle,
+                            "ORIGEN × FINANCIAMIENTO",
+                            analisis.origenFinanciamiento(), "ORIGEN", true) + 1;
+                    fila = escribirTablaCruceExcel(sh, fila, headerStyle,
+                            "TIPO DE ENTREGABLE × FINANCIAMIENTO",
+                            analisis.entregableFinanciamiento(), "TIPO DE ENTREGABLE", true) + 1;
+
+                    Row rTres = sh.createRow(fila++);
+                    rTres.createCell(0).setCellValue("3. CRUCE DE TRES VARIABLES");
+                    styleRow(rTres, headerStyle);
+                    for (CalculadoraEmprendimiento.BloqueFinanciamiento bloque : analisis.bloques()) {
+                        fila = escribirTablaCruceExcel(sh, fila, headerStyle,
+                                "ORIGEN × TIPO DE ENTREGABLE | " + bloque.financiamiento()
+                                        + " (n=" + bloque.total() + ")",
+                                bloque.tabla(), "ORIGEN", false) + 1;
                     }
-                    Row rhComp = sh.createRow(rowIdx++);
-                    rhComp.createCell(0).setCellValue("COMPARATIVO: SPIN-OFFS VS STARTUPS (p30)");
-                    styleRow(rhComp, headerStyle);
-                    Row rhc2 = sh.createRow(rowIdx++);
-                    rhc2.createCell(0).setCellValue("CATEGORÍA");
-                    rhc2.createCell(1).setCellValue("TOTAL");
-                    styleRow(rhc2, headerStyle);
-                    Row r1c = sh.createRow(rowIdx++);
-                    r1c.createCell(0).setCellValue("Spin Off");
-                    r1c.createCell(1).setCellValue(spin == null ? 0 : spin.getTotal());
-                    Row r2c = sh.createRow(rowIdx++);
-                    r2c.createCell(0).setCellValue("StartUp");
-                    r2c.createCell(1).setCellValue(start == null ? 0 : start.getTotal());
-                    rowIdx++;
-                    // Resumen y recomendaciones
-                    Row rhRes = sh.createRow(rowIdx++);
-                    rhRes.createCell(0).setCellValue("RESUMEN Y RECOMENDACIÓN");
-                    styleRow(rhRes, headerStyle);
-                    for (String b : resumenEmprendimientoBullets(porPreg)) {
-                        Row rr = sh.createRow(rowIdx++);
-                        rr.createCell(0).setCellValue(b);
-                    }
-                    Row rhRec = sh.createRow(rowIdx++);
-                    rhRec.createCell(0).setCellValue("RECOMENDACIONES PARA EL PLAN DE DESARROLLO ESTRATÉGICO");
-                    styleRow(rhRec, headerStyle);
-                    for (String r : resumenEmprendimientoRecomendaciones(porPreg)) {
-                        Row rr = sh.createRow(rowIdx++);
-                        rr.createCell(0).setCellValue(r);
+
+                    if (!analisis.resumen().isEmpty()) {
+                        Row rResumen = sh.createRow(fila++);
+                        rResumen.createCell(0).setCellValue("4. RESUMEN");
+                        styleRow(rResumen, headerStyle);
+                        CellStyle resumenStyle = sh.getWorkbook().createCellStyle();
+                        resumenStyle.setWrapText(true);
+                        resumenStyle.setVerticalAlignment(VerticalAlignment.TOP);
+                        for (String linea : analisis.resumen()) {
+                            Row rr = sh.createRow(fila++);
+                            Cell celda = rr.createCell(0);
+                            celda.setCellValue(linea);
+                            celda.setCellStyle(resumenStyle);
+                            rr.setHeightInPoints(28);
+                            sh.addMergedRegion(new CellRangeAddress(rr.getRowNum(), rr.getRowNum(), 0, 7));
+                        }
                     }
                 }
                 case "desempleo" -> {
-                    rowIdx++;
-                    Row rh1 = sh.createRow(rowIdx++);
-                    rh1.createCell(0).setCellValue("RAZÓN PARA CONTINUAR DESEMPLEADO (p28)");
-                    rh1.createCell(1).setCellValue("EXPERIENCIA ANTERIOR (p29)");
-                    rh1.createCell(2).setCellValue("TOTAL");
-                    styleRow(rh1, headerStyle);
-                    for (CeldaCruce cc : EncuestaDAO.obtenerCruce(28, 29)) {
-                        Row rr = sh.createRow(rowIdx++);
-                        rr.createCell(0).setCellValue(cc.getValorX());
-                        rr.createCell(1).setCellValue(cc.getValorY());
-                        rr.createCell(2).setCellValue(cc.getTotal());
-                    }
-                    rowIdx++;
-                    Row rh2 = sh.createRow(rowIdx++);
-                    rh2.createCell(0).setCellValue("TIEMPO HASTA PRIMER EMPLEO (p36)");
-                    rh2.createCell(1).setCellValue("NÚMERO DE EMPLEOS (p37)");
-                    rh2.createCell(2).setCellValue("TOTAL");
-                    styleRow(rh2, headerStyle);
-                    for (CeldaCruce cc : EncuestaDAO.obtenerCruce(36, 37)) {
-                        Row rr = sh.createRow(rowIdx++);
-                        rr.createCell(0).setCellValue(cc.getValorX());
-                        rr.createCell(1).setCellValue(cc.getValorY());
-                        rr.createCell(2).setCellValue(cc.getTotal());
-                    }
+                    rowIdx = escribirAnalisisDesempleoExcel(
+                            sh, rowIdx, headerStyle, analisisDesempleo());
                 }
                 case "formacion" -> {
                     rowIdx++;
@@ -1415,78 +1545,33 @@ public class ExportController {
                                             COL, row, ANCHO_COLS, 22);
                 }
                 case "emprendimiento" -> {
-                    // 1. Gráfico Nativo: Origen del emprendimiento (p30) -> Filas 4 a 7 (índices 3 a 6)
-                    crearGraficoBarrasNativo(sh, "Origen del emprendimiento (p30)", 
-                                            0, 1, 
-                                            4, 7,  
-                                            COL, 3, ANCHO_COLS, 18);
+                    CalculadoraEmprendimiento.AnalisisExploratorio analisis =
+                            CalculadoraEmprendimiento.analisisExploratorio(
+                                    EncuestaDAO.obtenerRegistrosEmprendimiento());
+                    LayoutEmprendimientoExcel layout = layoutEmprendimientoExcel(analisis);
+                    int filaGrafico = layout.origenInicio();
 
-                    // 2. Gráfico Nativo: Tipo de entregable (p31) -> Filas 11 a 13 (índices 10 a 12)
-                    crearGraficoBarrasNativo(sh, "Tipo de entregable (p31)", 
-                                            0, 1, 
-                                            10, 12, 
-                                            COL, 23, ANCHO_COLS, 18);
-
-                    // 3. Gráfico Nativo: Financiamiento externo (p32) -> Filas 16 a 18 (índices 15 a 17)
-                    crearGraficoBarrasNativo(sh, "Financiamiento externo (p32)", 
-                                            0, 1, 
-                                            15, 17, 
-                                            COL, 43, ANCHO_COLS, 18);
-
-                    // 4. Gráfico Nativo: Satisfacción (p33) -> Filas 21 a 23 (índices 20 a 22)
-                    crearGraficoBarrasNativo(sh, "Satisfacción con el rendimiento (p33)", 
-                                            0, 1, 
-                                            20, 22, 
-                                            COL, 63, ANCHO_COLS, 18);
-
-                    // 5. Gráfico Nativo: Importancia (p34) -> Filas 26 a 28 (índices 25 a 27)
-                    crearGraficoBarrasNativo(sh, "Importancia de la formación (p34)", 
-                                            0, 1, 
-                                            25, 27, 
-                                            COL, 83, ANCHO_COLS, 18);
+                    if (!analisis.origen().isEmpty()) {
+                        crearGraficoBarrasNativo(sh, "Origen del emprendimiento (p30)",
+                                0, 1,
+                                layout.origenInicio(), layout.origenFin(),
+                                COL, filaGrafico, ANCHO_COLS, 18);
+                    }
+                    if (!analisis.entregable().isEmpty()) {
+                        crearGraficoBarrasNativo(sh, "Tipo de entregable (p31)",
+                                0, 1,
+                                layout.entregableInicio(), layout.entregableFin(),
+                                COL, filaGrafico + 20, ANCHO_COLS, 18);
+                    }
+                    if (!analisis.financiamiento().isEmpty()) {
+                        crearGraficoBarrasNativo(sh, "Financiamiento (p32)",
+                                0, 1,
+                                layout.financiamientoInicio(), layout.financiamientoFin(),
+                                COL, filaGrafico + 40, ANCHO_COLS, 18);
+                    }
                 }
                 case "desempleo" -> {
-                    // 1. Escribir tabla resumen de Razones del Desempleo (p28) en la hoja para vincular el gráfico nativo
-                    List<ConteoRespuesta> razones = list(EncuestaDAO.contarRespuestas(28));
-                    int filaInicioP28 = sh.getLastRowNum() + 3;
-                    Row headerP28 = sh.createRow(filaInicioP28 - 1);
-                    headerP28.createCell(0).setCellValue("RAZÓN DEL DESEMPLEO (p28)");
-                    headerP28.createCell(1).setCellValue("TOTAL");
-
-                    int rIdx = filaInicioP28;
-                    for (ConteoRespuesta c : razones) {
-                        Row r = sh.createRow(rIdx++);
-                        r.createCell(0).setCellValue(c.getRespuesta() == null ? "" : c.getRespuesta().replace('\u00A0', ' ').trim());
-                        r.createCell(1).setCellValue(c.getTotal());
-                    }
-                    int filaFinP28 = rIdx - 1;
-
-                    // Gráfico Nativo 1: Razones del Desempleo (p28)
-                    crearGraficoBarrasNativo(sh, "Razones del desempleo (p28)",
-                            0, 1,
-                            filaInicioP28, filaFinP28,
-                            COL, 3, ANCHO_COLS, 22);
-
-                    // 2. Escribir tabla resumen de Tiempo de Inserción (p36) en la hoja
-                    List<ConteoRespuesta> tiempos = list(EncuestaDAO.contarRespuestas(36));
-                    int filaInicioP36 = filaFinP28 + 3;
-                    Row headerP36 = sh.createRow(filaInicioP36 - 1);
-                    headerP36.createCell(0).setCellValue("TIEMPO HASTA PRIMER EMPLEO (p36)");
-                    headerP36.createCell(1).setCellValue("TOTAL");
-
-                    rIdx = filaInicioP36;
-                    for (ConteoRespuesta c : tiempos) {
-                        Row r = sh.createRow(rIdx++);
-                        r.createCell(0).setCellValue(c.getRespuesta() == null ? "" : c.getRespuesta().replace('\u00A0', ' ').trim());
-                        r.createCell(1).setCellValue(c.getTotal());
-                    }
-                    int filaFinP36 = rIdx - 1;
-
-                    // Gráfico Nativo 2: Tiempo hasta el primer empleo (p36)
-                    crearGraficoBarrasNativo(sh, "Tiempo hasta el primer empleo (p36)",
-                            0, 1,
-                            filaInicioP36, filaFinP36,
-                            COL, 28, ANCHO_COLS, 22);
+                    // Las frecuencias ya se escriben con su tabla y total n en la hoja.
                 }
                 case "formacion" -> {
                     // 1. Gráfico Nativo de Barras para Áreas de Interés (p9)
@@ -1628,7 +1713,294 @@ public class ExportController {
 
     private static int countBlock(List<ConteoRespuesta> l) { return l == null ? 0 : l.size(); }
     private static int getSimpleCount(List<ConteoRespuesta> l) { return l == null ? 0 : l.size(); }
-    
+
+    private record LayoutEmprendimientoExcel(
+            int origenTitulo, int origenHeader, int origenInicio, int origenFin,
+            int entregableTitulo, int entregableHeader, int entregableInicio, int entregableFin,
+            int financiamientoTitulo, int financiamientoHeader, int financiamientoInicio, int financiamientoFin,
+            int inicioCruces) {
+    }
+
+    private static LayoutEmprendimientoExcel layoutEmprendimientoExcel(
+            CalculadoraEmprendimiento.AnalisisExploratorio analisis) {
+        int row = 4;
+
+        int origenTitulo = row++;
+        int origenHeader = row++;
+        int origenInicio = row;
+        row += Math.max(1, analisis.origen().size());
+        int origenFin = row - 1;
+        row += 2;
+
+        int entregableTitulo = row++;
+        int entregableHeader = row++;
+        int entregableInicio = row;
+        row += Math.max(1, analisis.entregable().size());
+        int entregableFin = row - 1;
+        row += 2;
+
+        int financiamientoTitulo = row++;
+        int financiamientoHeader = row++;
+        int financiamientoInicio = row;
+        row += Math.max(1, analisis.financiamiento().size());
+        int financiamientoFin = row - 1;
+        row += 2;
+
+        return new LayoutEmprendimientoExcel(
+                origenTitulo, origenHeader, origenInicio, origenFin,
+                entregableTitulo, entregableHeader, entregableInicio, entregableFin,
+                financiamientoTitulo, financiamientoHeader, financiamientoInicio, financiamientoFin,
+                row);
+    }
+
+    private static void escribirFrecuenciaExcel(
+            Sheet sh, int tituloRow, int headerRow, int inicio,
+            String titulo, List<CalculadoraEmprendimiento.Frecuencia> lista,
+            CellStyle headerStyle) {
+        Row rt = sh.createRow(tituloRow);
+        rt.createCell(0).setCellValue(titulo);
+        styleRow(rt, headerStyle);
+
+        Row rh = sh.createRow(headerRow);
+        rh.createCell(0).setCellValue("CATEGORÍA");
+        rh.createCell(1).setCellValue("TOTAL");
+        rh.createCell(2).setCellValue("%");
+        styleRow(rh, headerStyle);
+
+        int fila = inicio;
+        if (lista == null || lista.isEmpty()) {
+            sh.createRow(fila).createCell(0).setCellValue("Sin datos");
+            return;
+        }
+        for (CalculadoraEmprendimiento.Frecuencia f : lista) {
+            Row rr = sh.createRow(fila++);
+            rr.createCell(0).setCellValue(f.etiqueta());
+            rr.createCell(1).setCellValue(f.total());
+            rr.createCell(2).setCellValue(DF2.format(f.porcentaje()));
+        }
+    }
+
+    private static int escribirTablaCruceExcel(
+            Sheet sh, int rowIdx, CellStyle headerStyle, String titulo,
+            CalculadoraEmprendimiento.TablaCruce tabla,
+            String etiquetaFila, boolean porcentajeFila) {
+        int ri = rowIdx;
+
+        Row rt = sh.createRow(ri++);
+        rt.createCell(0).setCellValue(titulo);
+        styleRow(rt, headerStyle);
+
+        Row rh = sh.createRow(ri++);
+        int col = 0;
+        rh.createCell(col++).setCellValue(etiquetaFila);
+        String etiquetaPct = porcentajeFila ? " (% fila)" : " (% bloque)";
+        for (String columna : tabla.columnas()) {
+            rh.createCell(col++).setCellValue(columna + " (n)");
+            rh.createCell(col++).setCellValue(columna + etiquetaPct);
+        }
+        rh.createCell(col).setCellValue("Total");
+        styleRow(rh, headerStyle);
+
+        for (int i = 0; i < tabla.filas().size(); i++) {
+            Row rr = sh.createRow(ri++);
+            col = 0;
+            rr.createCell(col++).setCellValue(tabla.filas().get(i));
+            for (int j = 0; j < tabla.columnas().size(); j++) {
+                int valor = tabla.celdas().get(i).get(j);
+                int denominador = porcentajeFila
+                        ? tabla.totalesFila().get(i)
+                        : tabla.total();
+                rr.createCell(col++).setCellValue(valor);
+                rr.createCell(col++).setCellValue(DF2.format(pctDe(valor, denominador)));
+            }
+            rr.createCell(col).setCellValue(tabla.totalesFila().get(i));
+        }
+
+        Row tr = sh.createRow(ri++);
+        col = 0;
+        tr.createCell(col++).setCellValue("Total");
+        for (int j = 0; j < tabla.columnas().size(); j++) {
+            tr.createCell(col++).setCellValue(tabla.totalesColumna().get(j));
+            tr.createCell(col++).setCellValue("");
+        }
+        tr.createCell(col).setCellValue(tabla.total());
+        styleRow(tr, headerStyle);
+        return ri;
+    }
+
+    private static int escribirAnalisisDesempleoExcel(
+            Sheet sh, int rowIdx, CellStyle headerStyle,
+            CalculadoraDesempleo.AnalisisDesempleo analisis) {
+        int ri = rowIdx;
+
+        Row titulo = sh.createRow(ri++);
+        titulo.createCell(0).setCellValue("ANÁLISIS EXPLORATORIO - DESEMPLEO Y BARRERAS");
+        styleRow(titulo, headerStyle);
+
+        Row meta = sh.createRow(ri++);
+        meta.createCell(0).setCellValue("Envíos: " + analisis.total()
+                + " · Casos con las tres variables: " + analisis.conTresVariables());
+        ri++;
+
+        Row rFrec = sh.createRow(ri++);
+        rFrec.createCell(0).setCellValue("1. FRECUENCIAS");
+        styleRow(rFrec, headerStyle);
+
+        ri = escribirFrecuenciaDesempExcel(sh, ri, headerStyle,
+                "Situación laboral actual (p14)", analisis.situacion()) + 1;
+        ri = escribirFrecuenciaDesempExcel(sh, ri, headerStyle,
+                "Tiempo total de desempleo en años (p13)", analisis.tiempoDesempleo()) + 1;
+        ri = escribirFrecuenciaDesempExcel(sh, ri, headerStyle,
+                "Razón por la que no trabaja (p28)", analisis.razon()) + 1;
+        ri = escribirFrecuenciaDesempExcel(sh, ri, headerStyle,
+                "Años hasta el primer empleo (p36)", analisis.primerEmpleo()) + 1;
+        ri = escribirFrecuenciaDesempExcel(sh, ri, headerStyle,
+                "Años de vida profesional (p12)", analisis.vidaProfesional()) + 1;
+
+        Row rCruces = sh.createRow(ri++);
+        rCruces.createCell(0).setCellValue("2. CRUCES DE DOS VARIABLES");
+        styleRow(rCruces, headerStyle);
+
+        ri = escribirTablaCruceDesempExcel(sh, ri, headerStyle,
+                "SITUACIÓN LABORAL × TIEMPO DE DESEMPLEO",
+                analisis.situacionTiempo(), "SITUACIÓN LABORAL", true) + 1;
+        ri = escribirTablaCruceDesempExcel(sh, ri, headerStyle,
+                "MATRIZ DE BARRERAS: RAZÓN DE NO TRABAJAR × EXPERIENCIA PREVIA",
+                analisis.razonExperiencia(), "RAZÓN", true) + 1;
+        ri = escribirTablaCruceDesempExcel(sh, ri, headerStyle,
+                "RAZÓN DE NO TRABAJAR × AÑOS HASTA EL PRIMER EMPLEO",
+                analisis.razonPrimerEmpleo(), "RAZÓN", true) + 1;
+        ri = escribirTablaCruceDesempExcel(sh, ri, headerStyle,
+                "RAZÓN DE NO TRABAJAR × AÑOS DE VIDA PROFESIONAL",
+                analisis.razonVidaProfesional(), "RAZÓN", true) + 1;
+
+        Row rTres = sh.createRow(ri++);
+        rTres.createCell(0).setCellValue("3. CRUCE DE TRES VARIABLES");
+        styleRow(rTres, headerStyle);
+
+        for (CalculadoraDesempleo.BloqueRazon bloque : analisis.bloques()) {
+            ri = escribirTablaCruceDesempExcel(sh, ri, headerStyle,
+                    "AÑOS HASTA EL PRIMER EMPLEO × AÑOS DE VIDA PROFESIONAL | "
+                            + bloque.razon(),
+                    bloque.tabla(), "AÑOS HASTA EL PRIMER EMPLEO", false) + 1;
+        }
+
+        Row rDemandas = sh.createRow(ri++);
+        rDemandas.createCell(0).setCellValue("4. DEMANDAS DEL EMPLEADOR");
+        styleRow(rDemandas, headerStyle);
+
+        for (CalculadoraDesempleo.DemandaEmpleador demanda : analisis.demandas()) {
+            Row rt = sh.createRow(ri++);
+            rt.createCell(0).setCellValue(demanda.titulo() + " (n=" + demanda.total() + ")");
+            styleRow(rt, headerStyle);
+            Row rh = sh.createRow(ri++);
+            rh.createCell(0).setCellValue("PALABRA CLAVE");
+            rh.createCell(1).setCellValue("n");
+            rh.createCell(2).setCellValue("%");
+            styleRow(rh, headerStyle);
+            for (ConteoPalabra p : demanda.palabras()) {
+                Row rr = sh.createRow(ri++);
+                rr.createCell(0).setCellValue(p.getPalabra());
+                rr.createCell(1).setCellValue(p.getTotal());
+                rr.createCell(2).setCellValue(DF2.format(p.getPorcentaje()));
+            }
+            ri++;
+        }
+
+        if (!analisis.resumen().isEmpty()) {
+            Row rResumen = sh.createRow(ri++);
+            rResumen.createCell(0).setCellValue("5. RESUMEN");
+            styleRow(rResumen, headerStyle);
+            CellStyle resumenStyle = sh.getWorkbook().createCellStyle();
+            resumenStyle.setWrapText(true);
+            resumenStyle.setVerticalAlignment(VerticalAlignment.TOP);
+            for (String linea : analisis.resumen()) {
+                Row rr = sh.createRow(ri++);
+                Cell celda = rr.createCell(0);
+                celda.setCellValue(linea);
+                celda.setCellStyle(resumenStyle);
+                rr.setHeightInPoints(30);
+                sh.addMergedRegion(new CellRangeAddress(rr.getRowNum(), rr.getRowNum(), 0, 7));
+            }
+        }
+        return ri;
+    }
+
+    private static int escribirFrecuenciaDesempExcel(
+            Sheet sh, int rowIdx, CellStyle headerStyle, String titulo,
+            List<CalculadoraDesempleo.Frecuencia> lista) {
+        int ri = rowIdx;
+        int total = 0;
+        for (CalculadoraDesempleo.Frecuencia f : lista) total += f.total();
+
+        Row rt = sh.createRow(ri++);
+        rt.createCell(0).setCellValue(titulo + " (n=" + total + ")");
+        styleRow(rt, headerStyle);
+
+        Row rh = sh.createRow(ri++);
+        rh.createCell(0).setCellValue("CATEGORÍA");
+        rh.createCell(1).setCellValue("n");
+        rh.createCell(2).setCellValue("%");
+        styleRow(rh, headerStyle);
+
+        for (CalculadoraDesempleo.Frecuencia f : lista) {
+            Row rr = sh.createRow(ri++);
+            rr.createCell(0).setCellValue(f.etiqueta());
+            rr.createCell(1).setCellValue(f.total());
+            rr.createCell(2).setCellValue(DF2.format(f.porcentaje()));
+        }
+        Row rt2 = sh.createRow(ri++);
+        rt2.createCell(0).setCellValue("Total");
+        rt2.createCell(1).setCellValue(total);
+        rt2.createCell(2).setCellValue("100.0");
+        styleRow(rt2, headerStyle);
+        return ri;
+    }
+
+    private static int escribirTablaCruceDesempExcel(
+            Sheet sh, int rowIdx, CellStyle headerStyle, String titulo,
+            CalculadoraDesempleo.TablaCruce tabla,
+            String etiquetaFila, boolean porcentajeFila) {
+        int ri = rowIdx;
+
+        Row rt = sh.createRow(ri++);
+        rt.createCell(0).setCellValue(titulo + " (n=" + tabla.total() + ")");
+        styleRow(rt, headerStyle);
+
+        Row rh = sh.createRow(ri++);
+        int col = 0;
+        rh.createCell(col++).setCellValue(etiquetaFila);
+        for (String columna : tabla.columnas()) {
+            rh.createCell(col++).setCellValue(columna + " (n)");
+            rh.createCell(col++).setCellValue(columna + (porcentajeFila ? " (% fila)" : " (% bloque)"));
+        }
+        rh.createCell(col).setCellValue("Total");
+        styleRow(rh, headerStyle);
+
+        for (int i = 0; i < tabla.filas().size(); i++) {
+            Row rr = sh.createRow(ri++);
+            col = 0;
+            rr.createCell(col++).setCellValue(tabla.filas().get(i));
+            for (int j = 0; j < tabla.columnas().size(); j++) {
+                int valor = tabla.celdas().get(i).get(j);
+                int denominador = porcentajeFila ? tabla.totalesFila().get(i) : tabla.total();
+                rr.createCell(col++).setCellValue(valor);
+                rr.createCell(col++).setCellValue(DF2.format(pctDe(valor, denominador)));
+            }
+            rr.createCell(col).setCellValue(tabla.totalesFila().get(i));
+        }
+
+        Row tr = sh.createRow(ri++);
+        col = 0;
+        tr.createCell(col++).setCellValue("Total");
+        for (int j = 0; j < tabla.columnas().size(); j++) {
+            tr.createCell(col++).setCellValue(tabla.totalesColumna().get(j));
+            tr.createCell(col++).setCellValue("");
+        }
+        tr.createCell(col).setCellValue(tabla.total());
+        styleRow(tr, headerStyle);
+        return ri;
+    }
 
     /** Escribe una tabla de frecuencia cruzada (asignatura × variable) en la hoja Excel. Devuelve la próxima fila libre. */
     private static int escribirCruceExcel(Sheet sh, int rowIdx, CellStyle headerStyle, String titulo, List<CeldaCruce> celdas) {
@@ -1846,72 +2218,50 @@ public class ExportController {
                             as44top.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")));
                 }
                 case "emprendimiento" -> {
+                    CalculadoraEmprendimiento.AnalisisExploratorio analisis =
+                            CalculadoraEmprendimiento.analisisExploratorio(
+                                    EncuestaDAO.obtenerRegistrosEmprendimiento());
                     sb.append("<h2>2. Ecosistema de Emprendimiento e Innovación</h2>");
-                    @SuppressWarnings("unchecked")
-                    List<ConteoRespuesta> fe = EncuestaDAO.obtenerConteoEmprendimiento();
-                    if (fe == null) fe = Collections.emptyList();
-                    Map<Integer,List<ConteoRespuesta>> mp = new LinkedHashMap<>();
-                    for (ConteoRespuesta f : fe) mp.computeIfAbsent(f.getPreguntaId(), k->new ArrayList<>()).add(f);
+                    sb.append("<p class='meta'>Análisis exploratorio · ")
+                            .append(analisis.completos())
+                            .append(" casos con las tres respuestas");
+                    if (analisis.incompletos() > 0) {
+                        sb.append(" · ").append(analisis.incompletos()).append(" incompleto(s)");
+                    }
+                    sb.append("</p>");
 
-                    htmlEmpBlock(sb,"Origen del emprendimiento (p30)", mp.getOrDefault(30,new ArrayList<>()));
-                    htmlEmpBlock(sb,"Tipo de entregable (p31)", mp.getOrDefault(31,new ArrayList<>()));
-                    htmlEmpBlock(sb,"Financiamiento externo (p32)", mp.getOrDefault(32,new ArrayList<>()));
-                    htmlEmpBlock(sb,"Satisfacción con el rendimiento (p33)", mp.getOrDefault(33,new ArrayList<>()));
-                    htmlEmpBlock(sb,"Importancia de la formación (p34)", mp.getOrDefault(34,new ArrayList<>()));
+                    appendFrecuenciaHtml(sb, "Origen del emprendimiento (p30)", analisis.origen(), "Origen");
+                    appendFrecuenciaHtml(sb, "Tipo de entregable (p31)", analisis.entregable(), "Tipo de entregable");
+                    appendFrecuenciaHtml(sb, "Financiamiento (p32)", analisis.financiamiento(), "Financiamiento");
 
-                    List<ConteoRespuesta> d30h = mp.getOrDefault(30,new ArrayList<>());
-                    ConteoRespuesta sph=null, sth=null;
-                    for (ConteoRespuesta cp:d30h){ 
-                        String r = cp.getRespuesta()==null ? "" : cp.getRespuesta().toLowerCase(); 
-                        if(r.contains("spin")) sph=cp; 
-                        if(r.contains("start")) sth=cp;
+                    sb.append("<h2>2.1 Cruces de dos variables</h2>");
+                    appendTablaCruceHtml(sb, "Origen × tipo de entregable",
+                            analisis.origenEntregable(), "ORIGEN", true);
+                    appendTablaCruceHtml(sb, "Origen × financiamiento",
+                            analisis.origenFinanciamiento(), "ORIGEN", true);
+                    appendTablaCruceHtml(sb, "Tipo de entregable × financiamiento",
+                            analisis.entregableFinanciamiento(), "TIPO DE ENTREGABLE", true);
+
+                    sb.append("<h2>2.2 Cruce de tres variables</h2>");
+                    for (CalculadoraEmprendimiento.BloqueFinanciamiento bloque : analisis.bloques()) {
+                        appendTablaCruceHtml(sb,
+                                "Origen × tipo de entregable | " + bloque.financiamiento()
+                                        + " (n=" + bloque.total() + ")",
+                                bloque.tabla(), "ORIGEN", false);
                     }
 
-                    // FIX HALLAZGO A: Se quitó la línea duplicada de Spin Off
-                    sb.append("<h3>Comparativo: Spin-offs vs Startups (p30)</h3><table><tr><th>CATEGORÍA</th><th class='num'>TOTAL</th></tr>");
-                    sb.append("<tr><td>Spin Off</td><td class='num'>").append(sph==null?0:sph.getTotal()).append("</td></tr>");
-                    sb.append("<tr><td>StartUp</td><td class='num'>").append(sth==null?0:sth.getTotal()).append("</td></tr></table>");
-
-                    // Resumen y recomendaciones
-                    sb.append("<h3>Resumen y recomendación</h3><ul>");
-                    for (String b : resumenEmprendimientoBullets(mp)) sb.append("<li>").append(esc(b)).append("</li>");
-                    sb.append("</ul><h3>Recomendaciones para el Plan de Desarrollo Estratégico</h3><ul>");
-                    for (String r : resumenEmprendimientoRecomendaciones(mp)) sb.append("<li>").append(esc(r)).append("</li>");
-                    sb.append("</ul>");
-
-                    // FIX HALLAZGO B: Gráficos limpios
-                    int[] pids = {30,31,32,33,34};
-                    String[] titulos = {"Origen del emprendimiento (p30)","Tipo de entregable (p31)","Financiamiento externo (p32)","Satisfacción con el rendimiento (p33)","Importancia de la formación (p34)"};
-                    for (int k = 0; k < pids.length; k++) {
-                        List<ConteoRespuesta> lk = list(mp.getOrDefault(pids[k], new ArrayList<>()));
-                        sb.append(htmlChart(titulos[k], chartPie(titulos[k],
-                                lk.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                                lk.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()))));
+                    sb.append("<h2>2.3 Resumen</h2>");
+                    if (analisis.resumen().isEmpty()) {
+                        sb.append("<p>Sin datos.</p>");
+                    } else {
+                        sb.append("<ul>");
+                        for (String linea : analisis.resumen()) {
+                            sb.append("<li>").append(esc(linea)).append("</li>");
+                        }
+                        sb.append("</ul>");
                     }
-                    sb.append(htmlChart("Comparativo: Spin-offs vs Startups (p30)", chartBar("Spin-offs vs Startups", "Categoría", "Frecuencia",
-                            Arrays.asList("Spin Off", "StartUp"),
-                            Arrays.asList(sph==null?0.0:(double)sph.getTotal(), sth==null?0.0:(double)sth.getTotal()), "Total")));
                 }
-                case "desempleo" -> {
-                    sb.append("<h2>3. Desempleo y Barreras</h2>");
-                    sb.append("<h3>Matriz: Razones para continuar desempleado (p28) × Experiencia anterior (p29)</h3>");
-                    sb.append("<table><tr><th>RAZÓN (p28)</th><th>EXPERIENCIA ANTERIOR (p29)</th><th class='num'>TOTAL</th></tr>");
-                    for (CeldaCruce cc:EncuestaDAO.obtenerCruce(28,29)) sb.append("<tr><td>").append(esc(cc.getValorX())).append("</td><td>").append(esc(cc.getValorY())).append("</td><td class='num'>").append(cc.getTotal()).append("</td></tr>");
-                    sb.append("</table>");
-                    sb.append("<h3>Matriz: Tiempo hasta el primer empleo (p36) × Número de empleos (p37)</h3>");
-                    sb.append("<table><tr><th>TIEMPO HASTA PRIMER EMPLEO (p36)</th><th>NÚMERO DE EMPLEOS (p37)</th><th class='num'>TOTAL</th></tr>");
-                    for (CeldaCruce cc:EncuestaDAO.obtenerCruce(36,37)) sb.append("<tr><td>").append(esc(cc.getValorX())).append("</td><td>").append(esc(cc.getValorY())).append("</td><td class='num'>").append(cc.getTotal()).append("</td></tr>");
-                    sb.append("</table>");
-                    // Gráficos
-                    List<ConteoRespuesta> rz = list(EncuestaDAO.contarRespuestas(28));
-                    sb.append(htmlChart("Razones del desempleo (p28)", chartBar("Razones del desempleo", "Razón", "Frecuencia",
-                            rz.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            rz.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")));
-                    List<ConteoRespuesta> tp = list(EncuestaDAO.contarRespuestas(36));
-                    sb.append(htmlChart("Tiempo hasta el primer empleo (p36)", chartBar("Tiempo hasta el primer empleo", "Tiempo", "Frecuencia",
-                            tp.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            tp.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")));
-                }
+                case "desempleo" -> appendAnalisisDesempleoHtml(sb, analisisDesempleo());
                 case "formacion" -> {
                     sb.append("<h2>4. Formación continua y Mecanismos de financiamiento</h2>");
                     
@@ -2165,6 +2515,196 @@ public class ExportController {
         }
         sb.append("</body></html>");
         return sb.toString();
+    }
+
+    private static void appendAnalisisDesempleoHtml(
+            StringBuilder sb,
+            CalculadoraDesempleo.AnalisisDesempleo analisis) {
+        sb.append("<h2>3. Desempleo y Barreras</h2>");
+        sb.append("<p class='meta'>").append(analisis.total()).append(" envíos · ")
+                .append(analisis.conTresVariables()).append(" casos con las tres variables</p>");
+
+        sb.append("<h2>3.1 Frecuencias</h2>");
+        appendFrecuenciaDesempHtml(sb, "Situación laboral actual (p14)", analisis.situacion(), "Situación");
+        appendFrecuenciaDesempHtml(sb, "Tiempo total de desempleo en años (p13)", analisis.tiempoDesempleo(), "Años");
+        appendFrecuenciaDesempHtml(sb, "Razón por la que no trabaja (p28)", analisis.razon(), "Razón");
+        appendFrecuenciaDesempHtml(sb, "Años hasta el primer empleo (p36)", analisis.primerEmpleo(), "Años");
+        appendFrecuenciaDesempHtml(sb, "Años de vida profesional (p12)", analisis.vidaProfesional(), "Años");
+
+        sb.append("<h2>3.2 Cruces de dos variables</h2>");
+        appendTablaCruceDesempHtml(sb, "Situación laboral × tiempo de desempleo",
+                analisis.situacionTiempo(), "SITUACIÓN LABORAL", true);
+        appendTablaCruceDesempHtml(sb, "Matriz de barreras: razón de no trabajar × experiencia previa",
+                analisis.razonExperiencia(), "RAZÓN", true);
+        appendTablaCruceDesempHtml(sb, "Razón de no trabajar × años hasta el primer empleo",
+                analisis.razonPrimerEmpleo(), "RAZÓN", true);
+        appendTablaCruceDesempHtml(sb, "Razón de no trabajar × años de vida profesional",
+                analisis.razonVidaProfesional(), "RAZÓN", true);
+
+        sb.append("<h2>3.3 Cruce de tres variables</h2>");
+        if (analisis.bloques().isEmpty()) {
+            sb.append("<p>Sin casos completos para el cruce de tres variables.</p>");
+        } else {
+            for (CalculadoraDesempleo.BloqueRazon bloque : analisis.bloques()) {
+                appendTablaCruceDesempHtml(sb,
+                        "Años hasta el primer empleo × años de vida profesional | "
+                                + bloque.razon() + " (n=" + bloque.total() + ")",
+                        bloque.tabla(), "AÑOS HASTA EL PRIMER EMPLEO", false);
+            }
+        }
+
+        sb.append("<h2>3.4 Demandas del empleador</h2>");
+        if (analisis.demandas().isEmpty()) {
+            sb.append("<p>Sin respuestas de empleadores.</p>");
+        } else {
+            for (CalculadoraDesempleo.DemandaEmpleador demanda : analisis.demandas()) {
+                sb.append("<h3>").append(esc(demanda.titulo()))
+                        .append(" (n=").append(demanda.total()).append(")</h3>");
+                sb.append("<table><tr><th>PALABRA CLAVE</th><th class='num'>n</th><th class='num'>%</th></tr>");
+                for (ConteoPalabra p : demanda.palabras()) {
+                    sb.append("<tr><td>").append(esc(p.getPalabra()))
+                            .append("</td><td class='num'>").append(p.getTotal())
+                            .append("</td><td class='num'>").append(DF2.format(p.getPorcentaje()))
+                            .append("</td></tr>");
+                }
+                sb.append("</table>");
+            }
+        }
+
+        sb.append("<h2>3.5 Resumen</h2>");
+        if (analisis.resumen().isEmpty()) {
+            sb.append("<p>Sin datos.</p>");
+        } else {
+            sb.append("<ul>");
+            for (String linea : analisis.resumen()) {
+                sb.append("<li>").append(esc(linea)).append("</li>");
+            }
+            sb.append("</ul>");
+        }
+    }
+
+    private static void appendFrecuenciaDesempHtml(
+            StringBuilder sb, String titulo,
+            List<CalculadoraDesempleo.Frecuencia> lista,
+            String ejeCategoria) {
+        int total = 0;
+        for (CalculadoraDesempleo.Frecuencia f : lista) total += f.total();
+        sb.append("<h3>").append(esc(titulo)).append(" (n=").append(total).append(")</h3>");
+        if (lista.isEmpty()) {
+            sb.append("<p>Sin datos.</p>");
+            return;
+        }
+        List<String> categorias = lista.stream()
+                .map(CalculadoraDesempleo.Frecuencia::etiqueta)
+                .collect(java.util.stream.Collectors.toList());
+        List<Double> valores = lista.stream()
+                .map(f -> (double) f.total())
+                .collect(java.util.stream.Collectors.toList());
+        sb.append(htmlChart(titulo, chartBar(titulo, ejeCategoria, "Frecuencia",
+                categorias, valores, "Total")));
+        sb.append("<table><tr><th>").append(esc(ejeCategoria))
+                .append("</th><th class='num'>n</th><th class='num'>%</th></tr>");
+        for (CalculadoraDesempleo.Frecuencia f : lista) {
+            sb.append("<tr><td>").append(esc(f.etiqueta()))
+                    .append("</td><td class='num'>").append(f.total())
+                    .append("</td><td class='num'>").append(DF2.format(f.porcentaje()))
+                    .append("</td></tr>");
+        }
+        sb.append("<tr><th>Total</th><th class='num'>").append(total)
+                .append("</th><th class='num'>100.0</th></tr></table>");
+    }
+
+    private static void appendTablaCruceDesempHtml(
+            StringBuilder sb, String titulo,
+            CalculadoraDesempleo.TablaCruce tabla,
+            String etiquetaFila, boolean porcentajeFila) {
+        sb.append("<h3>").append(esc(titulo)).append(" (n=").append(tabla.total()).append(")</h3>");
+        sb.append("<table><tr><th>").append(esc(etiquetaFila)).append("</th>");
+        for (String columna : tabla.columnas()) {
+            sb.append("<th class='num'>").append(esc(columna)).append("</th>");
+        }
+        sb.append("<th class='num'>TOTAL</th></tr>");
+
+        for (int i = 0; i < tabla.filas().size(); i++) {
+            sb.append("<tr><td>").append(esc(tabla.filas().get(i))).append("</td>");
+            for (int j = 0; j < tabla.columnas().size(); j++) {
+                int valor = tabla.celdas().get(i).get(j);
+                int denominador = porcentajeFila ? tabla.totalesFila().get(i) : tabla.total();
+                sb.append("<td class='num'>").append(valor)
+                        .append("<br><small>").append(DF2.format(pctDe(valor, denominador)))
+                        .append("%</small></td>");
+            }
+            sb.append("<td class='num'>").append(tabla.totalesFila().get(i)).append("</td></tr>");
+        }
+
+        sb.append("<tr><th>Total</th>");
+        for (int j = 0; j < tabla.columnas().size(); j++) {
+            sb.append("<th class='num'>").append(tabla.totalesColumna().get(j)).append("</th>");
+        }
+        sb.append("<th class='num'>").append(tabla.total()).append("</th></tr></table>");
+    }
+
+    private static void appendFrecuenciaHtml(
+            StringBuilder sb, String titulo,
+            List<CalculadoraEmprendimiento.Frecuencia> lista,
+            String ejeCategoria) {
+        if (lista == null || lista.isEmpty()) {
+            sb.append("<h3>").append(esc(titulo)).append("</h3>");
+            sb.append("<p>Sin datos.</p>");
+            return;
+        }
+        List<String> categorias = lista.stream()
+                .map(CalculadoraEmprendimiento.Frecuencia::etiqueta)
+                .collect(java.util.stream.Collectors.toList());
+        List<Double> valores = lista.stream()
+                .map(f -> (double) f.total())
+                .collect(java.util.stream.Collectors.toList());
+        sb.append(htmlChart(titulo, chartBar(titulo, ejeCategoria, "Frecuencia",
+                categorias, valores, "Total")));
+        sb.append("<table><tr><th>").append(esc(ejeCategoria))
+                .append("</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
+        for (CalculadoraEmprendimiento.Frecuencia f : lista) {
+            sb.append("<tr><td>").append(esc(f.etiqueta()))
+                    .append("</td><td class='num'>").append(f.total())
+                    .append("</td><td class='num'>").append(DF2.format(f.porcentaje()))
+                    .append("</td></tr>");
+        }
+        sb.append("</table>");
+    }
+
+    private static void appendTablaCruceHtml(
+            StringBuilder sb, String titulo,
+            CalculadoraEmprendimiento.TablaCruce tabla,
+            String etiquetaFila, boolean porcentajeFila) {
+        sb.append("<h3>").append(esc(titulo)).append("</h3>");
+        sb.append("<p class='meta'>Conteo y porcentaje ")
+                .append(porcentajeFila ? "por fila" : "del bloque")
+                .append("</p>");
+        sb.append("<table><tr><th>").append(esc(etiquetaFila)).append("</th>");
+        for (String columna : tabla.columnas()) {
+            sb.append("<th class='num'>").append(esc(columna)).append("</th>");
+        }
+        sb.append("<th class='num'>TOTAL</th></tr>");
+
+        for (int i = 0; i < tabla.filas().size(); i++) {
+            sb.append("<tr><td>").append(esc(tabla.filas().get(i))).append("</td>");
+            for (int j = 0; j < tabla.columnas().size(); j++) {
+                int valor = tabla.celdas().get(i).get(j);
+                int denominador = porcentajeFila
+                        ? tabla.totalesFila().get(i)
+                        : tabla.total();
+                sb.append("<td class='num'>").append(valor)
+                        .append("<br><small>").append(DF2.format(pctDe(valor, denominador)))
+                        .append("%</small></td>");
+            }
+            sb.append("<td class='num'>").append(tabla.totalesFila().get(i)).append("</td></tr>");
+        }
+
+        sb.append("<tr><th>Total</th>");
+        for (int j = 0; j < tabla.columnas().size(); j++) {
+            sb.append("<th class='num'>").append(tabla.totalesColumna().get(j)).append("</th>");
+        }
+        sb.append("<th class='num'>").append(tabla.total()).append("</th></tr></table>");
     }
 
     private static void htmlEmpBlock(StringBuilder sb, String titulo, List<ConteoRespuesta> lista) {

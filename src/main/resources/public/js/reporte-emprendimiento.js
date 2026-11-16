@@ -1,142 +1,253 @@
-const META = {
-  30: { titulo: 'Origen del emprendimiento',        tipo: 'pie' },
-  31: { titulo: 'Tipo de entregable',               tipo: 'pie' },
-  32: { titulo: 'Financiamiento externo',           tipo: 'pie' },
-  33: { titulo: 'Satisfacción con el rendimiento',  tipo: 'bar' },
-  34: { titulo: 'Importancia de la formación',      tipo: 'bar' }
-};
-const COLORES = ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#0dcaf0'];
-
 async function cargarReporteEmprendimiento() {
   const cont = document.getElementById('contenedorGraficos');
   cont.innerHTML = '<p class="text-muted">Cargando reporte...</p>';
   try {
     const res = await fetch('/api/reportes/emprendimiento');
-    if (!res.ok) throw new Error();
-    const filas = await res.json();
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const datos = await res.json();
     cont.innerHTML = '';
-    dibujarTodo(filas);
+    renderReporteEmprendimiento(datos);
   } catch (e) {
     cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte.</p>';
   }
 }
 
-function dibujarTodo(filas) {
-  const porPregunta = {};
-  filas.forEach(f => {
-    (porPregunta[f.preguntaId] = porPregunta[f.preguntaId] || []).push(f);
-  });
+function renderReporteEmprendimiento(datos) {
+  const cont = document.getElementById('contenedorGraficos');
+  const n = Number(datos.completos ?? datos.total ?? 0);
+  const incompletos = Number(datos.incompletos ?? 0);
 
-  Object.keys(META).forEach(pid => {
-    const datos = porPregunta[pid] || [];
-    const { titulo, tipo } = META[pid];
+  cont.insertAdjacentHTML('beforeend', `
+    <div class="col-12">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h6 class="fw-bold text-primary mb-1">Análisis exploratorio</h6>
+          <p class="text-muted small mb-0">Origen, tipo de entregable y financiamiento · ${n} casos completos</p>
+        </div>
+        ${incompletos > 0 ? `<span class="badge text-bg-warning">${incompletos} caso(s) incompleto(s)</span>` : ''}
+      </div>
+    </div>`);
 
-    const col = document.createElement('div');
-    col.className = 'col-md-6';
-    col.innerHTML = `<div class="card border-0 shadow-sm h-100"><div class="card-body">
-        <h6 class="fw-bold text-primary">${titulo}</h6>
-        <canvas id="grafico_${pid}" height="230"></canvas>
-      </div></div>`;
-    document.getElementById('contenedorGraficos').appendChild(col);
-
-    if (datos.length === 0) {
-      col.querySelector('canvas').outerHTML = '<p class="text-muted small mb-0">Sin respuestas todavía.</p>';
-      return;
-    }
-    dibujar('grafico_' + pid, tipo, datos);
-  });
-
-  // Comparativo Spin-offs vs Startups
-    const d30 = porPregunta[30] || [];
-    const spin  = d30.find(d => d.respuesta.toLowerCase().includes('spin'));
-    const start = d30.find(d => d.respuesta.toLowerCase().includes('start'));
-    if (spin || start) {
-        const col = document.createElement('div');
-        col.className = 'col-md-6';
-        col.innerHTML = `<div class="card border-0 shadow-sm h-100"><div class="card-body">
-            <h6 class="fw-bold text-primary">Comparativo: Spin-offs vs Startups</h6>
-            <canvas id="grafico_comparativo" height="230"></canvas></div></div>`;
-        document.getElementById('contenedorGraficos').appendChild(col);
-        new Chart(document.getElementById('grafico_comparativo'), {
-            type: 'bar',
-            data: {
-            labels: ['Spin Off', 'StartUp'],
-            datasets: [{ data: [spin ? spin.total : 0, start ? start.total : 0],
-                        backgroundColor: ['#6f42c1', '#0dcaf0'] }]
-            },
-            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-        });
-    }
-
-  renderResumen();
+  renderFrecuencias(cont, datos, n);
+  renderCrucesDosVariables(cont, datos);
+  renderCrucesTresVariables(cont, datos);
+  renderResumen(cont, datos);
 }
 
-// El resumen se calcula en el servidor (CalculadoraEmprendimiento) para que la
-// interfaz, el CSV, el Excel y el PDF muestren exactamente los mismos resultados.
-function renderResumen() {
-  const cont = document.getElementById('contenedorGraficos');
-  if (!cont) return;
+function renderResumen(cont, datos) {
+  const lineas = Array.isArray(datos.resumen) ? datos.resumen.filter(Boolean) : [];
+  if (!lineas.length) return;
 
-  fetch('/api/reportes/emprendimiento/resumen')
-    .then(res => {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.json();
-    })
-    .then(datos => {
-      const bullets = (datos.bullets || []).map(b => `<li>${escapar(b)}</li>`).join('');
-      const recomendaciones = datos.recomendaciones || [];
+  cont.insertAdjacentHTML('beforeend', `
+    <div class="col-12 mt-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-3">
+          <h6 class="fw-bold text-primary mb-2">Resumen</h6>
+          <ul class="mb-0 small ps-3">
+            ${lineas.map(linea => `<li>${escapar(linea)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+    </div>`);
+}
 
-      const ulRecom = recomendaciones.length
-        ? `<ul class="mb-0 small">${recomendaciones.map(r => `<li>${escapar(r)}</li>`).join('')}</ul>`
-        : '<p class="small text-muted mb-0">Sin recomendaciones por ahora (faltan datos).</p>';
+function renderFrecuencias(cont, datos, n) {
+  insertarTituloSeccion(cont, 'Frecuencias', 'Distribución de cada variable');
 
-      cont.insertAdjacentHTML('beforeend', `
-        <div class="col-12 mt-3">
-          <div class="card border-0 shadow-sm">
-            <div class="card-body">
-              <h6 class="fw-bold text-primary">Resumen y recomendación</h6>
-              <ul class="mb-3 small">${bullets || '<li class="text-muted">Sin respuestas todavía.</li>'}</ul>
-              <h6 class="fw-bold text-primary">Recomendaciones para el Plan de Desarrollo Estratégico</h6>
-              ${ulRecom}
-            </div>
+  const variables = [
+    { titulo: 'Origen', datos: datos.origen || [], color: '#0d6efd' },
+    { titulo: 'Tipo de entregable', datos: datos.entregable || [], color: '#198754' },
+    { titulo: 'Financiamiento', datos: datos.financiamiento || [], color: '#ffc107' }
+  ];
+
+  variables.forEach((variable, indice) => {
+    const col = document.createElement('div');
+    col.className = 'col-lg-4';
+    col.innerHTML = `
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="fw-bold text-primary mb-0">${escapar(variable.titulo)}</h6>
+            <span class="badge text-bg-light">n = ${n}</span>
           </div>
-        </div>`);
-    })
-    .catch(() => {
-      cont.insertAdjacentHTML('beforeend', `
-        <div class="col-12 mt-3">
-          <div class="alert alert-warning mb-0">No se pudo calcular el resumen del reporte.</div>
-        </div>`);
+          <div style="height:230px">
+            <canvas id="edaFrecuencia_${indice}"></canvas>
+          </div>
+        </div>
+      </div>`;
+    cont.appendChild(col);
+
+    if (!variable.datos.length) {
+      col.querySelector('div[style]').outerHTML = '<p class="text-muted small mb-0">Sin datos.</p>';
+      return;
+    }
+
+    new Chart(document.getElementById('edaFrecuencia_' + indice), {
+      type: 'bar',
+      data: {
+        labels: variable.datos.map(d => d.etiqueta),
+        datasets: [{
+          data: variable.datos.map(d => d.total),
+          backgroundColor: variable.color,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.raw} (${porcentaje(ctx.raw, n)}%)`
+            }
+          }
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } },
+          y: { ticks: { autoSkip: false } }
+        }
+      }
     });
+  });
+}
+
+function renderCrucesDosVariables(cont, datos) {
+  insertarTituloSeccion(cont, 'Cruces de dos variables', 'Conteo y porcentaje por fila');
+
+  const cruces = [
+    {
+      titulo: 'Origen × tipo de entregable',
+      tabla: datos.origenEntregable,
+      fila: 'Origen',
+      clase: 'col-lg-6'
+    },
+    {
+      titulo: 'Origen × financiamiento',
+      tabla: datos.origenFinanciamiento,
+      fila: 'Origen',
+      clase: 'col-lg-6'
+    },
+    {
+      titulo: 'Tipo de entregable × financiamiento',
+      tabla: datos.entregableFinanciamiento,
+      fila: 'Tipo de entregable',
+      clase: 'col-lg-12'
+    }
+  ];
+
+  cruces.forEach(cruce => {
+    const col = document.createElement('div');
+    col.className = cruce.clase;
+    col.innerHTML = `
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-bold text-primary mb-3">${escapar(cruce.titulo)}</h6>
+          <div class="table-responsive">
+            ${tablaCruceHTML(cruce.tabla, cruce.fila, 'fila')}
+          </div>
+        </div>
+      </div>`;
+    cont.appendChild(col);
+  });
+}
+
+function renderCrucesTresVariables(cont, datos) {
+  insertarTituloSeccion(
+    cont,
+    'Cruce de tres variables',
+    'Cada bloque corresponde a un tipo de financiamiento · conteo y porcentaje del bloque'
+  );
+
+  const bloques = datos.bloques || [];
+  if (!bloques.length) {
+    cont.insertAdjacentHTML('beforeend', '<div class="col-12"><p class="text-muted small mb-0">Sin datos.</p></div>');
+    return;
+  }
+
+  bloques.forEach(bloque => {
+    const col = document.createElement('div');
+    col.className = 'col-lg-4';
+    col.innerHTML = `
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+            <h6 class="fw-bold text-primary mb-0">${escapar(bloque.financiamiento)}</h6>
+            <span class="badge text-bg-light">n = ${bloque.total}</span>
+          </div>
+          <div class="table-responsive">
+            ${tablaCruceHTML(bloque.tabla, 'Origen', 'bloque')}
+          </div>
+        </div>
+      </div>`;
+    cont.appendChild(col);
+  });
+}
+
+function insertarTituloSeccion(cont, titulo, subtitulo) {
+  cont.insertAdjacentHTML('beforeend', `
+    <div class="col-12 mt-3">
+      <h6 class="fw-bold text-primary mb-1">${escapar(titulo)}</h6>
+      <p class="text-muted small mb-0">${escapar(subtitulo)}</p>
+    </div>`);
+}
+
+function tablaCruceHTML(tabla, etiquetaFila, base) {
+  if (!tabla || !tabla.filas || !tabla.columnas) {
+    return '<p class="text-muted small mb-0">Sin datos.</p>';
+  }
+
+  const celdas = tabla.celdas || [];
+  const totalesFila = tabla.totalesFila || [];
+  const totalesColumna = tabla.totalesColumna || [];
+  const total = Number(tabla.total || 0);
+  const maximo = Math.max(0, ...celdas.flat().map(Number));
+
+  let html = '<table class="table table-sm table-bordered align-middle mb-0">';
+  html += '<thead class="table-light"><tr>';
+  html += `<th>${escapar(etiquetaFila)}</th>`;
+  tabla.columnas.forEach(columna => {
+    html += `<th class="text-end">${escapar(columna)}</th>`;
+  });
+  html += '<th class="text-end">Total</th></tr></thead><tbody>';
+
+  tabla.filas.forEach((fila, i) => {
+    html += `<tr><th scope="row" class="fw-semibold">${escapar(fila)}</th>`;
+    tabla.columnas.forEach((columna, j) => {
+      const valor = Number(celdas[i]?.[j] ?? 0);
+      const denominador = base === 'fila' ? Number(totalesFila[i] || 0) : total;
+      html += `<td class="text-end" style="${fondoCalor(valor, maximo)}">${valor}`;
+      html += `<br><small class="text-muted">${porcentaje(valor, denominador)}%</small></td>`;
+    });
+    html += `<td class="text-end fw-semibold">${Number(totalesFila[i] || 0)}</td></tr>`;
+  });
+
+  html += '<tr class="table-light"><th>Total</th>';
+  tabla.columnas.forEach((columna, j) => {
+    html += `<td class="text-end fw-semibold">${Number(totalesColumna[j] || 0)}</td>`;
+  });
+  html += `<td class="text-end fw-bold">${total}</td></tr>`;
+  html += '</tbody></table>';
+  return html;
+}
+
+function fondoCalor(valor, maximo) {
+  if (!valor || !maximo) return '';
+  const intensidad = Math.min(0.32, 0.06 + (valor / maximo) * 0.26);
+  return `background: rgba(13, 110, 253, ${intensidad.toFixed(3)});`;
+}
+
+function porcentaje(parte, total) {
+  if (!total) return '0.0';
+  return (Number(parte) * 100 / Number(total)).toFixed(1);
 }
 
 function escapar(s) {
   return String(s == null ? '' : s)
-    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-}
-
-function dibujar(canvasId, tipo, datos) {
-  const total = datos.reduce((a, d) => a + d.total, 0);
-  new Chart(document.getElementById(canvasId), {
-    type: tipo,
-    data: {
-      labels: datos.map(d => d.respuesta),
-      datasets: [{ data: datos.map(d => d.total), backgroundColor: COLORES }]
-    },
-    options: {
-      plugins: {
-        legend: { display: tipo === 'pie', position: 'bottom' },
-        tooltip: {
-          callbacks: {
-            label: c => {
-              const pct = total ? (c.raw * 100 / total).toFixed(1) : 0;
-              return `${c.label}: ${c.raw} (${pct}%)`;   // ← el % aquí
-            }
-          }
-        }
-      },
-      scales: tipo === 'bar' ? { y: { beginAtZero: true, ticks: { stepSize: 1 } } } : {}
-    }
-  });
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
