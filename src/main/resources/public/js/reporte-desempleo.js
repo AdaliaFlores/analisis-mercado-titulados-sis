@@ -3,6 +3,15 @@
 
   const COLORES = ['#dc3545', '#fd7e14', '#ffc107', '#198754', '#0d6efd', '#6f42c1', '#20c997', '#0dcaf0'];
 
+  function esc(valor) {
+    return String(valor ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function card(titulo, inner) {
     const col = document.createElement('div');
     col.className = 'col-12';
@@ -16,136 +25,158 @@
     return col;
   }
 
-  function tablaSimple(filas) {
+  function suma(filas) {
+    return (filas || []).reduce((s, f) => s + (f.total || 0), 0);
+  }
+
+  function pct(parte, total) {
+    return total ? (Math.round(1000 * parte / total) / 10) : 0;
+  }
+
+  function tablaFrecuencia(filas, etiqueta) {
+    const total = suma(filas);
     return `
       <div class="table-responsive mt-3">
-        <table class="table table-sm table-bordered mb-0">
+        <table class="table table-sm table-bordered align-middle mb-0">
           <thead class="table-light"><tr>
-            <th>Opción</th><th class="text-center">Frecuencia</th><th class="text-center">%</th>
+            <th>${esc(etiqueta || 'Opción')}</th>
+            <th class="text-center">n</th>
+            <th class="text-center">%</th>
           </tr></thead>
           <tbody>
-            ${filas.map(f => `<tr><td>${f.respuesta}</td>
+            ${(filas || []).map(f => `<tr>
+              <td>${esc(f.etiqueta)}</td>
               <td class="text-center">${f.total}</td>
-              <td class="text-center">${f.porcentaje}%</td></tr>`).join('')}
+              <td class="text-center">${f.porcentaje}%</td>
+            </tr>`).join('')}
           </tbody>
+          <tfoot class="table-light"><tr>
+            <th>Total</th>
+            <th class="text-center">${total}</th>
+            <th class="text-center">100%</th>
+          </tr></tfoot>
         </table>
       </div>`;
   }
 
-  function addBarra(cont, id, titulo, filas, horizontal) {
-    if (!filas.length) { cont.appendChild(card(titulo, '<p class="text-muted mb-0">Sin datos.</p>')); return; }
-    const canvas = `<canvas id="${id}" height="${horizontal ? Math.max(160, filas.length * 34) : 120}"></canvas>`;
-    cont.appendChild(card(titulo, canvas + tablaSimple(filas)));
+  function addFrecuencia(cont, id, titulo, filas, horizontal) {
+    const total = suma(filas);
+    if (!filas || !filas.length) {
+      cont.appendChild(card(`${esc(titulo)} · n=0`, '<p class="text-muted mb-0">Sin datos.</p>'));
+      return;
+    }
+    const canvas = `<canvas id="${id}" height="${horizontal ? Math.max(160, filas.length * 34) : 150}"></canvas>`;
+    cont.appendChild(card(`${esc(titulo)} <span class="badge text-bg-light">n=${total}</span>`,
+      canvas + tablaFrecuencia(filas, 'Opción')));
     new Chart(document.getElementById(id), {
       type: 'bar',
       data: {
-        labels: filas.map(f => f.respuesta),
-        datasets: [{ data: filas.map(f => f.total), backgroundColor: filas.map((_, i) => COLORES[i % COLORES.length]) }]
+        labels: filas.map(f => f.etiqueta),
+        datasets: [{
+          data: filas.map(f => f.total),
+          backgroundColor: filas.map((_, i) => COLORES[i % COLORES.length])
+        }]
       },
       options: {
         indexAxis: horizontal ? 'y' : 'x',
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (c) => `${c.raw} (${filas[c.dataIndex].porcentaje}%)` } }
+          tooltip: {
+            callbacks: { label: (c) => `${c.raw} (${filas[c.dataIndex].porcentaje}%)` }
+          }
         },
         scales: { [horizontal ? 'x' : 'y']: { beginAtZero: true, ticks: { stepSize: 1 } } }
       }
     });
   }
 
-  function addMatriz(cont, titulo, celdas, nota) {
-    if (!celdas || celdas.length === 0) {
-      cont.appendChild(card(titulo, '<p class="text-muted mb-0">Sin datos suficientes para este cruce.</p>')); return;
+  function tablaCruce(tabla, etiquetaFila, porcentajeFila) {
+    if (!tabla || !tabla.filas || !tabla.filas.length || !tabla.columnas || !tabla.columnas.length) {
+      return '<p class="text-muted mb-0">Sin datos suficientes para este cruce.</p>';
     }
-    const xs = [...new Set(celdas.map(c => c.valorX))];
-    const ys = [...new Set(celdas.map(c => c.valorY))];
-    const val = (x, y) => { const c = celdas.find(c => c.valorX === x && c.valorY === y); return c ? c.total : 0; };
-    const max = Math.max(...celdas.map(c => c.total));
-    const color = (v) => v === 0 ? '#ffffff' : `rgba(220,53,69,${0.12 + 0.78 * (v / max)})`;
-
-    const inner = `
-      ${nota ? `<p class="text-muted small">${nota}</p>` : ''}
+    return `
       <div class="table-responsive">
         <table class="table table-bordered table-sm text-center align-middle mb-0">
           <thead class="table-light"><tr>
-            <th class="text-start">Razón \\ Situación</th>
-            ${ys.map(y => `<th>${y}</th>`).join('')}
+            <th class="text-start">${esc(etiquetaFila)}</th>
+            ${tabla.columnas.map(c => `<th>${esc(c)}</th>`).join('')}
             <th class="table-secondary">Total</th>
           </tr></thead>
           <tbody>
-            ${xs.map(x => {
-              const tot = ys.reduce((s, y) => s + val(x, y), 0);
-              return `<tr><th class="text-start">${x}</th>
-                ${ys.map(y => `<td style="background:${color(val(x,y))}">${val(x,y)}</td>`).join('')}
-                <td class="table-secondary fw-bold">${tot}</td></tr>`;
-            }).join('')}
+            ${tabla.filas.map((fila, i) => `<tr>
+              <th class="text-start">${esc(fila)}</th>
+              ${tabla.columnas.map((col, j) => {
+                const valor = tabla.celdas[i][j];
+                const den = porcentajeFila ? tabla.totalesFila[i] : tabla.total;
+                return `<td>${valor}<br><small class="text-muted">${pct(valor, den)}%</small></td>`;
+              }).join('')}
+              <td class="table-secondary fw-bold">${tabla.totalesFila[i]}</td>
+            </tr>`).join('')}
           </tbody>
+          <tfoot class="table-light"><tr>
+            <th class="text-start">Total</th>
+            ${tabla.totalesColumna.map(t => `<th>${t}</th>`).join('')}
+            <th>${tabla.total}</th>
+          </tr></tfoot>
         </table>
       </div>`;
-    cont.appendChild(card(titulo, inner));
   }
 
-  function addDemandas(cont, d) {
-    const bloque = (titulo, filas, crudas) => `
-      <div class="col-md-4">
-        <h6 class="fw-bold text-danger">${titulo}</h6>
-        ${filas.length ? `<table class="table table-sm table-bordered">
-          <thead class="table-light"><tr><th>Palabra clave</th><th class="text-center">n</th><th class="text-center">%</th></tr></thead>
-          <tbody>${filas.map(f => `<tr><td>${f.palabra}</td><td class="text-center">${f.total}</td><td class="text-center">${f.porcentaje}%</td></tr>`).join('')}</tbody>
-        </table>` : '<p class="text-muted small">Sin coincidencias de palabras clave.</p>'}
-        <!-- <div class="small text-muted"><b>Respuestas crudas:</b> ${crudas.length ? crudas.map(c => `"${c}"`).join(', ') : '—'}</div> -->
-      </div>`;
+  function addCruce(cont, titulo, tabla, etiquetaFila, porcentajeFila) {
+    const n = tabla ? tabla.total : 0;
+    cont.appendChild(card(`${esc(titulo)} <span class="badge text-bg-light">n=${n}</span>`,
+      tablaCruce(tabla, etiquetaFila, porcentajeFila)));
+  }
 
+  function addBloques(cont, bloques) {
+    if (!bloques || !bloques.length) {
+      cont.appendChild(card('Cruce de tres variables · n=0',
+        '<p class="text-muted mb-0">Sin casos completos para el cruce de tres variables.</p>'));
+      return;
+    }
+    bloques.forEach((bloque, i) => {
+      cont.appendChild(card(
+        `${esc(bloque.razon)} <span class="badge text-bg-light">n=${bloque.total}</span>`,
+        `<p class="text-muted small mb-2">Años hasta el primer empleo × años de vida profesional</p>
+         <div id="bloqueDesempleo${i}">${tablaCruce(bloque.tabla, 'Primer empleo', false)}</div>`));
+    });
+  }
+
+  function addDemandas(cont, demandas) {
+    if (!demandas || !demandas.length) {
+      cont.appendChild(card('Demandas del empleador', '<p class="text-muted mb-0">Sin respuestas de empleadores.</p>'));
+      return;
+    }
     const inner = `
-      <p class="text-muted small mb-3">Agrupación por frecuencia de palabras clave en las respuestas de texto abierto del empleador.</p>
+      <p class="text-muted small mb-3">Conteo de palabras clave en las respuestas de texto abierto del empleador.</p>
       <div class="row g-3">
-        ${bloque('Tendencias emergentes', d.tendenciasEmpleador, d.respuestasTendencias)}
-        ${bloque('Herramientas tecnológicas', d.herramientasEmpleador, d.respuestasHerramientas)}
-        ${bloque('Competencias fundamentales', d.competenciasEmpleador, d.respuestasCompetencias)}
+        ${demandas.map(d => `
+          <div class="col-md-4">
+            <h6 class="fw-bold text-danger">${esc(d.titulo)} <span class="badge text-bg-light">n=${d.total}</span></h6>
+            ${d.palabras && d.palabras.length ? `
+              <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light"><tr>
+                  <th>Palabra clave</th><th class="text-center">n</th><th class="text-center">%</th>
+                </tr></thead>
+                <tbody>
+                  ${d.palabras.map(p => `<tr>
+                    <td>${esc(p.palabra)}</td>
+                    <td class="text-center">${p.total}</td>
+                    <td class="text-center">${p.porcentaje}%</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>` : '<p class="text-muted small mb-0">Sin coincidencias de palabras clave.</p>'}
+          </div>`).join('')}
       </div>`;
-    cont.appendChild(card('Demandas del empleador (conteo de frecuencias)', inner));
+    cont.appendChild(card('Demandas del empleador', inner));
   }
 
-  function addKpis(cont, d) {
-    const pct = (n, t) => t ? Math.round(1000 * n / t) / 10 : 0;
-    const kpi = (titulo, valor, sub, color) => `
-      <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body text-center">
-            <div class="fs-3 fw-bold text-${color}">${valor}</div>
-            <div class="small fw-semibold">${titulo}</div>
-            <div class="text-muted small">${sub}</div>
-          </div>
-        </div>
-      </div>`;
-    const col = document.createElement('div');
-    col.className = 'col-12';
-    col.innerHTML = `<div class="row g-3">
-      ${kpi('Titulados encuestados', d.totalTitulados, 'encuesta de titulados', 'primary')}
-      ${kpi('No trabajan', d.noTrabaja, pct(d.noTrabaja, d.totalTitulados) + '% del total', 'danger')}
-      ${kpi('Con tiempo desempleado', d.conTiempoDesempleo, pct(d.conTiempoDesempleo, d.totalTitulados) + '% del total', 'warning')}
-      ${kpi('Población objetivo', d.poblacionObjetivo, 'no trabaja o tiempo > 0', 'dark')}
-    </div>`;
-    cont.appendChild(col);
-  }
-
-  function addResumen(cont, d) {
-    const pct = (n, t) => t ? Math.round(1000 * n / t) / 10 : 0;
-    const razones = d.razones || [];
-    const barrera = razones.filter(r => /experiencia|habilidades/i.test(r.respuesta)).reduce((s, r) => s + r.total, 0);
-    const listTop = (arr) => (arr || []).slice(0, 3).map(x => `${x.palabra} (${x.total})`).join(', ') || 'sin coincidencias';
-    const nEmp = (d.respuestasTendencias || []).length;
-
-    const p1 = `De ${d.totalTitulados} titulados encuestados, ${d.noTrabaja} no trabajan (${pct(d.noTrabaja, d.totalTitulados)}%) y ${d.conTiempoDesempleo} reportaron tiempo de desempleo mayor a 0. La población objetivo (no trabaja o con tiempo de desempleo) es de ${d.poblacionObjetivo} titulados.`;
-    const p2 = razones.length
-      ? `Las razones más citadas para no trabajar son: ${razones.map(r => r.respuesta + ' (' + r.total + ')').join(', ')}. De ellas, ${barrera} corresponden a barreras de competencias o experiencia previa.`
-      : `No se registraron razones de inactividad.`;
-    const p3 = nEmp
-      ? `Los ${nEmp} empleadores participantes señalan como demandas emergentes: ${listTop(d.tendenciasEmpleador)}; como herramientas: ${listTop(d.herramientasEmpleador)}; y como competencias: ${listTop(d.competenciasEmpleador)}.`
-      : `La encuesta de empleadores aún no tiene respuestas.`;
-    const p4 = `Contraste: mientras los titulados reportan barreras de experiencia o habilidades específicas, los empleadores priorizan herramientas como ${listTop(d.herramientasEmpleador)} y tendencias como ${listTop(d.tendenciasEmpleador)}, lo que sugiere una brecha entre la formación y las competencias tecnológicas demandadas.`;
-
-    cont.appendChild(card('Resumen', [p1, p2, p3, p4].map(p => `<p class="mb-2">${p}</p>`).join('')));
+  function addResumen(cont, lineas) {
+    if (!lineas || !lineas.length) return;
+    cont.appendChild(card('Resumen', `
+      <ul class="mb-0 small ps-3">
+        ${lineas.map(linea => `<li>${esc(linea)}</li>`).join('')}
+      </ul>`));
   }
 
   window.cargarReporteDesempleo = async function () {
@@ -158,16 +189,32 @@
       const d = await res.json();
       cont.innerHTML = '';
 
-      addKpis(cont, d);
-      addBarra(cont, 'situacionCanvas', 'Situación laboral actual', d.situacionActual || [], false);
-      addBarra(cont, 'tiempoCanvas', 'Tiempo total desempleado — años', d.tiempoDesempleo || [], false);
-      addBarra(cont, 'razonesCanvas', 'Razón por la que no trabaja', d.razones || [], true);
-      addMatriz(cont, 'Matriz de barreras: Razón de no trabajar × Experiencia previa', d.matrizBarreras || []);
-      addMatriz(cont, 'Matriz de inserción: Tiempo al primer empleo × Cantidad de empleos', d.matrizInsercion || []);
-      addDemandas(cont, d);
-      addResumen(cont, d);
+      cont.insertAdjacentHTML('beforeend', `
+        <div class="col-12">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h6 class="fw-bold text-danger mb-1">Análisis exploratorio</h6>
+              <p class="text-muted small mb-0">Desempleo, trayectoria y barreras · ${d.total} envíos · ${d.conTresVariables} con las tres variables</p>
+            </div>
+          </div>
+        </div>`);
+
+      addFrecuencia(cont, 'situacionDesempleoCanvas', 'Situación laboral actual', d.situacion || [], true);
+      addFrecuencia(cont, 'tiempoDesempleoCanvas', 'Tiempo total de desempleo (años)', d.tiempoDesempleo || [], true);
+      addFrecuencia(cont, 'razonDesempleoCanvas', 'Razón por la que no trabaja', d.razon || [], true);
+      addFrecuencia(cont, 'primerEmpleoCanvas', 'Años hasta el primer empleo', d.primerEmpleo || [], true);
+      addFrecuencia(cont, 'vidaProfesionalCanvas', 'Años de vida profesional', d.vidaProfesional || [], true);
+
+      addCruce(cont, 'Situación laboral × tiempo de desempleo', d.situacionTiempo, 'Situación laboral', true);
+      addCruce(cont, 'Matriz de barreras: razón de no trabajar × experiencia previa', d.razonExperiencia, 'Razón', true);
+      addCruce(cont, 'Razón de no trabajar × años hasta el primer empleo', d.razonPrimerEmpleo, 'Razón', true);
+      addCruce(cont, 'Razón de no trabajar × años de vida profesional', d.razonVidaProfesional, 'Razón', true);
+
+      addBloques(cont, d.bloques || []);
+      addDemandas(cont, d.demandas || []);
+      addResumen(cont, d.resumen || []);
     } catch (e) {
-      cont.innerHTML = '<div class="col-12"><p class="text-danger">No se pudo cargar el reporte: ' + e.message + '</p></div>';
+      cont.innerHTML = '<div class="col-12"><p class="text-danger">No se pudo cargar el reporte: ' + esc(e.message) + '</p></div>';
     }
   };
 

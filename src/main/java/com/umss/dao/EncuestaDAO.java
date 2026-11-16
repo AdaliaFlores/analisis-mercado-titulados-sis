@@ -7,6 +7,8 @@ import com.umss.model.DimensionRadar;
 import com.umss.model.Encuesta;
 import com.umss.model.IndicadorEscala;
 import com.umss.model.Pregunta;
+import com.umss.model.RegistroEmprendimiento;
+import com.umss.model.RegistroDesempleo;
 import com.umss.model.RespuestaDTO;
 
 import java.sql.*;
@@ -88,6 +90,72 @@ public class EncuestaDAO {
                 lista.add(c);
             }
      }
+        return lista;
+    }
+
+    /**
+     * Devuelve una fila por envío con las respuestas de origen, entregable y
+     * financiamiento. Se incluyen los envíos que respondieron p30 aunque les
+     * falte p31 o p32, para poder informar los casos incompletos.
+     */
+    public static List<RegistroEmprendimiento> obtenerRegistrosEmprendimiento() throws SQLException {
+        List<RegistroEmprendimiento> lista = new ArrayList<>();
+        String sql = "SELECT MAX(CASE WHEN pregunta_id = 30 THEN TRIM(respuesta) END) AS origen, "
+                   + "MAX(CASE WHEN pregunta_id = 31 THEN TRIM(respuesta) END) AS entregable, "
+                   + "MAX(CASE WHEN pregunta_id = 32 THEN TRIM(respuesta) END) AS financiamiento "
+                   + "FROM (SELECT " + claveEnvio("r") + " AS clave, r.pregunta_id, r.respuesta "
+                   + "      FROM respuestas r "
+                   + "      WHERE r.pregunta_id IN (30,31,32) "
+                   + "        AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> '') t "
+                   + "GROUP BY clave "
+                   + "HAVING MAX(CASE WHEN pregunta_id = 30 THEN 1 ELSE 0 END) = 1 "
+                   + "ORDER BY origen, entregable, financiamiento";
+        try (Connection conn = Database.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                lista.add(new RegistroEmprendimiento(
+                        rs.getString("origen"),
+                        rs.getString("entregable"),
+                        rs.getString("financiamiento")));
+            }
+        }
+        return lista;
+    }
+
+    /**
+     * Devuelve una fila por envío con las variables del reporte de desempleo.
+     * Se conservan todos los envíos con al menos una de las preguntas y no se
+     * modifica la base de datos; las respuestas de texto se normalizan después.
+     */
+    public static List<RegistroDesempleo> obtenerRegistrosDesempleo() throws SQLException {
+        List<RegistroDesempleo> lista = new ArrayList<>();
+        String sql = "SELECT "
+                + "MAX(CASE WHEN pregunta_id = 14 THEN TRIM(respuesta) END) AS situacion, "
+                + "MAX(CASE WHEN pregunta_id = 13 THEN TRIM(respuesta) END) AS tiempo_desempleo, "
+                + "MAX(CASE WHEN pregunta_id = 28 THEN TRIM(respuesta) END) AS razon, "
+                + "MAX(CASE WHEN pregunta_id = 29 THEN TRIM(respuesta) END) AS experiencia, "
+                + "MAX(CASE WHEN pregunta_id = 36 THEN TRIM(respuesta) END) AS primer_empleo, "
+                + "MAX(CASE WHEN pregunta_id = 12 THEN TRIM(respuesta) END) AS vida_profesional "
+                + "FROM (SELECT " + claveEnvio("r") + " AS clave, r.pregunta_id, r.respuesta "
+                + "      FROM respuestas r "
+                + "      WHERE r.pregunta_id IN (12,13,14,28,29,36) "
+                + "        AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> '') t "
+                + "GROUP BY clave "
+                + "ORDER BY situacion, razon";
+        try (Connection conn = Database.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                lista.add(new RegistroDesempleo(
+                        rs.getString("situacion"),
+                        rs.getString("tiempo_desempleo"),
+                        rs.getString("razon"),
+                        rs.getString("experiencia"),
+                        rs.getString("primer_empleo"),
+                        rs.getString("vida_profesional")));
+            }
+        }
         return lista;
     }
 
