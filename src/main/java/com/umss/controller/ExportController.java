@@ -471,11 +471,6 @@ public class ExportController {
                         sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
                     }
                 }
-                case "cruce" -> {
-                    sb.append("=== CRUCE DE VARIABLES (MATRIZ DE FRECUENCIA CRUZADA) ===\r\n");
-                    sb.append("NOTA: Este reporte se genera dinámicamente en la interfaz. Exportación tabular por defecto:\r\n\r\n");
-                    sb.append("MATRIZ GENÉRICA (X × Y),VALOR_X,VALOR_Y,TOTAL\r\n");
-                }
                 case "ubicacion" -> {
                     sb.append("=== PERTINENCIA CURRICULAR, GEOGRAFÍA Y FUGA DE TALENTOS (HU11) ===\r\n\r\n");
 
@@ -1057,7 +1052,7 @@ public class ExportController {
                 .append("</td><td class='num fw-bold'>").append(g.media() == null ? "—" : DF2.format(g.media()))
                 .append("</td><td class='num'>").append(g.desviacion() == null ? "—" : DF2.format(g.desviacion()))
                 .append("</td><td class='small'>").append(g.muestraSuficiente() ? "" : "n &lt; 5: poco confiable")
-                .append(g.sinCodificar() > 0 ? " · " + g.sinCodificar() + " sin valor assigned" : "")
+                .append(g.sinCodificar() > 0 ? " · " + g.sinCodificar() + " sin valor asignado" : "")
                 .append("</td></tr>");
             }
             sb.append("<tr class='table-secondary fw-bold'><th>General</th><td class='num'>").append(r.n())
@@ -1411,10 +1406,6 @@ public class ExportController {
                     addSimpleSection(sh, rowIdx, "RUBROS DE INVERSIÓN (p53)", EncuestaDAO.contarRespuestas(53), headerStyle);
                     rowIdx += getSimpleCount(EncuestaDAO.contarRespuestas(53)) + 2;
                     addSimpleSection(sh, rowIdx, "POSIBILIDAD DE CONTRATACIÓN (p55)", EncuestaDAO.contarRespuestas(55), headerStyle);
-                }
-                case "cruce" -> {
-                    Row rr = sh.createRow(rowIdx++);
-                    rr.createCell(0).setCellValue("Reporte de cruce dinámico. Use la interfaz para generar matrices específicas.");
                 }
                 case "ubicacion" -> {
                     rowIdx++;

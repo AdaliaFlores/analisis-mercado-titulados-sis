@@ -4,36 +4,53 @@
   const COLORES = ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14', '#20c997', '#6610f2', '#d63384'];
 
   let charts = [];
+  let cargandoEmpleabilidad = false;
+
+  function destruirGraficos() {
+    charts.forEach(c => {
+      try { c.destroy(); } catch (e) { /* el canvas anterior ya no existe */ }
+    });
+    charts = [];
+  }
 
   window.cargarReporteEmpleabilidad = async function () {
-    const cont = document.getElementById('contenedorEmpleabilidad');
-    cont.innerHTML = '<p class="text-muted">Cargando reporte...</p>';
-    charts.forEach(c => { try { c.destroy(); } catch (e) {} });
-    charts = [];
+    if (cargandoEmpleabilidad) return;
 
-    let d;
+    const cont = document.getElementById('contenedorEmpleabilidad');
+    if (!cont) return;
+
+    cargandoEmpleabilidad = true;
+    destruirGraficos();
+    cont.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
+        <p class="text-muted mb-0">Cargando análisis de empleabilidad...</p>
+      </div>`;
+
     try {
       const res = await fetch('/api/reportes/empleabilidad');
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      d = await res.json();
+      const d = await res.json();
+
+      cont.innerHTML = '';
+
+      cont.insertAdjacentHTML('beforeend', `
+      <div class="col-12">
+        <div class="alert alert-light border small mb-0">
+          <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Áreas con mayor empleabilidad</span>
+          = (Demanda empleador + Interés de titulados) / 2.
+        </div>
+      </div>`);
+      renderEstadisticosAntiguedad(cont, d.estadisticosAntiguedad); 
+      renderEmpleabilidadBarras(cont, d.areasEmpleabilidad);
+      renderPocaDemandaEjes(cont, d);
+      renderResumen(cont, d);
     } catch (e) {
-      cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte: ' + e.message + '</p>';
-      return;
+      destruirGraficos();
+      cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte: ' + escapar(e.message) + '</p>';
+    } finally {
+      cargandoEmpleabilidad = false;
     }
-
-    cont.innerHTML = '';
-
-    cont.insertAdjacentHTML('beforeend', `
-    <div class="col-12">
-      <div class="alert alert-light border small mb-0">
-        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Áreas con mayor empleabilidad</span>
-        = (Demanda empleador + Interés de titulados) / 2.
-      </div>
-    </div>`);
-    renderEstadisticosAntiguedad(cont, d.estadisticosAntiguedad); 
-    renderEmpleabilidadBarras(cont, d.areasEmpleabilidad);
-    renderPocaDemandaEjes(cont, d);
-    renderResumen(cont, d);
   };
   function renderEstadisticosAntiguedad(cont, st) {
     if (!st || !st.n) return;
@@ -135,20 +152,23 @@
       </div>`);
 
     const labels = [];
+    const etiquetasCompletas = [];
     const datosCriticas = [];
     const datosAsign = [];
     const datosSinContrat = [];
 
     // Eje X: combinar indicadores relevantes
     criticas.forEach(c => {
-      labels.push('Razón: ' + acortar(c.respuesta, 28));
+      etiquetasCompletas.push(c.respuesta || '');
+      labels.push(acortar(c.respuesta, 42));
       datosCriticas.push(c.porcentaje);
       datosAsign.push(0);
       datosSinContrat.push(0);
     });
 
     asign.forEach(a => {
-      labels.push('Poca utilidad: ' + acortar(a.respuesta, 28));
+      etiquetasCompletas.push(a.respuesta || '');
+      labels.push(acortar(a.respuesta, 42));
       datosCriticas.push(0);
       datosAsign.push(a.porcentaje);
       datosSinContrat.push(0);
@@ -157,7 +177,8 @@
     contr.forEach(x => {
       const v = (x.respuesta || '').toLowerCase();
       if (v.includes('no') || v.includes('baja') || v.includes('limitada') || v.includes('depende') || v.includes('dudosa')) {
-        labels.push('Contratación: ' + acortar(x.respuesta, 28));
+        etiquetasCompletas.push(x.respuesta || '');
+        labels.push(acortar(x.respuesta, 42));
         datosCriticas.push(0);
         datosAsign.push(0);
         datosSinContrat.push(x.porcentaje);
@@ -166,8 +187,20 @@
 
     if (labels.length === 0) {
       // fallback
-      (d.razonesCriticas || []).slice(0, 4).forEach(c => { labels.push(acortar(c.respuesta,26)); datosCriticas.push(c.porcentaje); });
-      (d.asignaturasPocaUtilidadTop || []).slice(0, 4).forEach(a => { labels.push(acortar(a.respuesta,26)); datosAsign.push(a.porcentaje); });
+      (d.razonesCriticas || []).slice(0, 4).forEach(c => {
+        etiquetasCompletas.push(c.respuesta || '');
+        labels.push(acortar(c.respuesta, 42));
+        datosCriticas.push(c.porcentaje);
+        datosAsign.push(0);
+        datosSinContrat.push(0);
+      });
+      (d.asignaturasPocaUtilidadTop || []).slice(0, 4).forEach(a => {
+        etiquetasCompletas.push(a.respuesta || '');
+        labels.push(acortar(a.respuesta, 42));
+        datosCriticas.push(0);
+        datosAsign.push(a.porcentaje);
+        datosSinContrat.push(0);
+      });
     }
 
     charts.push(new Chart(document.getElementById('graficoPocaDemanda'), {
@@ -183,9 +216,29 @@
       options: {
         indexAxis: 'y',
         scales: {
-          x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
+          x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
+          y: {
+            ticks: {
+              callback: function (valor) {
+                const etiqueta = this.getLabelForValue ? this.getLabelForValue(valor) : valor;
+                return String(etiqueta == null ? '' : etiqueta)
+                  .replace(/^(Razón|Poca utilidad|Contratación):\s*/i, '');
+              }
+            }
+          }
         },
-        plugins: { tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.x + '%' } } }
+        plugins: {
+          tooltip: {
+            callbacks: {
+              title: (items) => {
+                if (!items || !items.length) return '';
+                const completo = etiquetasCompletas[items[0].dataIndex] || '';
+                return dividirEnLineas(completo, 48);
+              },
+              label: c => c.dataset.label + ': ' + c.parsed.x + '%'
+            }
+          }
+        }
       }
     }));
 
@@ -275,6 +328,26 @@
   function acortar(s, n) {
     if (!s) return '';
     return s.length > n ? s.substring(0, n - 1) + '…' : s;
+  }
+
+  // Divide un texto largo en líneas para que el tooltip no se salga de la pantalla.
+  function dividirEnLineas(texto, ancho) {
+    const palabras = String(texto == null ? '' : texto).split(/\s+/).filter(Boolean);
+    if (!palabras.length) return '';
+    const lineas = [];
+    let actual = '';
+    palabras.forEach(p => {
+      if (!actual) {
+        actual = p;
+      } else if ((actual + ' ' + p).length <= ancho) {
+        actual += ' ' + p;
+      } else {
+        lineas.push(actual);
+        actual = p;
+      }
+    });
+    if (actual) lineas.push(actual);
+    return lineas;
   }
 
   function escapar(s) {

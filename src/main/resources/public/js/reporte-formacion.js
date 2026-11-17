@@ -2,39 +2,56 @@
   'use strict';
 
   let charts = [];
+  let cargandoFormacion = false;
+
+  function destruirGraficos() {
+    charts.forEach(c => {
+      try { c.destroy(); } catch (e) { /* el canvas anterior ya no existe */ }
+    });
+    charts = [];
+  }
 
   window.cargarReporteFormacion = async function () {
-    const cont = document.getElementById('contenedorFormacion');
-    cont.innerHTML = '<p class="text-muted">Cargando reporte...</p>';
-    charts.forEach(c => { try { c.destroy(); } catch (e) {} });
-    charts = [];
+    if (cargandoFormacion) return;
 
-    let d;
+    const cont = document.getElementById('contenedorFormacion');
+    if (!cont) return;
+
+    cargandoFormacion = true;
+    destruirGraficos();
+    cont.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
+        <p class="text-muted mb-0">Cargando análisis de formación continua y financiamiento...</p>
+      </div>`;
+
     try {
       const res = await fetch('/api/reportes/formacion-financiamiento');
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      d = await res.json();
+      const d = await res.json();
+
+      cont.innerHTML = '';
+
+      cont.insertAdjacentHTML('beforeend', `
+        <div class="col-12">
+          <div class="alert alert-light border small mb-0">
+            <strong class="text-info">Formación continua y mecanismos de financiamiento.</strong>
+            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Formación continua</span>
+            = áreas de interés de posgrado y nivel de formación deseado.
+            <span class="badge bg-secondary-subtle text-dark border border-secondary-subtle">Financiamiento</span>
+            = matriz de contingencia Nivel × Fuente de financiamiento + diagnóstico χ² (gl, p-valor).
+          </div>
+        </div>`);
+
+      renderFormacionContinua(cont, d);
+      renderFinanciamiento(cont, d.financiamiento || {}, d.nivelesFormacion);
+      renderResumen(cont, d);
     } catch (e) {
-      cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte: ' + e.message + '</p>';
-      return;
+      destruirGraficos();
+      cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte: ' + escapar(e.message) + '</p>';
+    } finally {
+      cargandoFormacion = false;
     }
-
-    cont.innerHTML = '';
-
-    cont.insertAdjacentHTML('beforeend', `
-      <div class="col-12">
-        <div class="alert alert-light border small mb-0">
-          <strong class="text-info">Formación continua y mecanismos de financiamiento.</strong>
-          <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Formación continua</span>
-          = áreas de interés de posgrado y nivel de formación deseado.
-          <span class="badge bg-secondary-subtle text-dark border border-secondary-subtle">Financiamiento</span>
-          = matriz de contingencia Nivel × Fuente de financiamiento + diagnóstico χ² (gl, p-valor).
-        </div>
-      </div>`);
-
-    renderFormacionContinua(cont, d);
-    renderFinanciamiento(cont, d.financiamiento, d.nivelesFormacion);
-    renderResumen(cont, d);
   };
 
   function renderFormacionContinua(cont, d) {
@@ -206,7 +223,10 @@
 
       // 2. Destruir gráfico anterior si existe y crear el nuevo filtrado
       if (chartNivelOrg) {
-        chartNivelOrg.destroy();
+        const indice = charts.indexOf(chartNivelOrg);
+        if (indice >= 0) charts.splice(indice, 1);
+        try { chartNivelOrg.destroy(); } catch (e) { /* el canvas ya no existe */ }
+        chartNivelOrg = null;
       }
 
       if (!cruce2.length) return;
@@ -377,7 +397,7 @@
                 <div class="col-md-3">
                   <div class="border rounded p-2 h-100">
                     <div class="small text-muted">Valor p (p-value)</div>
-                    <div class="fs-4 fw-bold">${Number(chi2.valorP || 1).toFixed(3)}</div>
+                    <div class="fs-4 fw-bold">${Number(chi2.valorP ?? 1).toFixed(3)}</div>
                   </div>
                 </div>
                 <div class="col-md-3">
