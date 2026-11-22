@@ -24,20 +24,6 @@ public class ReporteController {
         }
     }
 
-    /**
-     * Mismo análisis exploratorio que el reporte principal. Se conserva el
-     * endpoint para clientes antiguos que todavía lo consultan.
-     */
-    public static void reporteEmprendimientoResumen(Context ctx) {
-        try {
-            ctx.json(CalculadoraEmprendimiento.analisisExploratorio(
-                    EncuestaDAO.obtenerRegistrosEmprendimiento()));
-        } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error al generar el resumen: " + e.getMessage());
-        }
-    }
-
     public static void reporteCruce(Context ctx) {
         try {
             int x = Integer.parseInt(ctx.queryParam("x"));
