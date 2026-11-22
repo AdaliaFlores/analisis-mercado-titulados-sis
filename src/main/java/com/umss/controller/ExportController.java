@@ -1107,26 +1107,7 @@ public class ExportController {
         return chartBar("P" + pid + ": " + HU12_TITULOS.getOrDefault(pid, ""), "Respuesta", "Total", etiquetas, valores, "Total");
     }
 
-    // Resumen de Ecosistema de Emprendimiento e Innovación (mismo que la interfaz)
     private static double pctDe(long g, long t) { return t == 0 ? 0 : (g * 100.0 / t); }
-
-    // La lógica vive en CalculadoraEmprendimiento para que interfaz, exportadores y pruebas
-    // compartan exactamente las mismas fórmulas (ver docs/emprendimiento-calculos.md).
-    private static List<String> resumenEmprendimientoBullets(Map<Integer, List<ConteoRespuesta>> porPreg) {
-        return CalculadoraEmprendimiento.bullets(aplanar(porPreg));
-    }
-
-    private static List<String> resumenEmprendimientoRecomendaciones(Map<Integer, List<ConteoRespuesta>> porPreg) {
-        return CalculadoraEmprendimiento.recomendaciones(aplanar(porPreg));
-    }
-
-    private static List<ConteoRespuesta> aplanar(Map<Integer, List<ConteoRespuesta>> porPreg) {
-        List<ConteoRespuesta> out = new ArrayList<>();
-        for (List<ConteoRespuesta> lista : porPreg.values()) {
-            out.addAll(lista);
-        }
-        return out;
-    }
 
     // EXCEL
 

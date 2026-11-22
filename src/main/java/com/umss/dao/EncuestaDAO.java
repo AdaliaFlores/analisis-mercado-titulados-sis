@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import com.umss.model.AreaEmpleabilidad;
 import com.umss.model.AreaInteresPosgrado;
 import com.umss.model.ResultadoChi2;
+import com.umss.util.CalculadoraBrechas;
 
 public class EncuestaDAO {
 
@@ -62,34 +63,6 @@ public class EncuestaDAO {
                 }
             }
         }
-        return lista;
-    }
-
-    public static List<ConteoRespuesta> obtenerConteoEmprendimiento() throws SQLException {
-        List<ConteoRespuesta> lista = new ArrayList<>();
-        String sql = """
-            SELECT pregunta_id,
-                TRIM(respuesta) AS respuesta,
-                COUNT(*) AS total,
-                ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY pregunta_id), 1) AS porcentaje
-            FROM respuestas
-            WHERE pregunta_id IN (30,31,32,33,34)
-            AND respuesta IS NOT NULL AND TRIM(respuesta) <> ''
-            GROUP BY pregunta_id, TRIM(respuesta)
-            ORDER BY pregunta_id, total DESC
-            """;
-        try (Connection conn = Database.getConnection();
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                ConteoRespuesta c = new ConteoRespuesta();
-                c.setPreguntaId(rs.getInt("pregunta_id"));
-                c.setRespuesta(rs.getString("respuesta"));
-                c.setTotal(rs.getInt("total"));
-                c.setPorcentaje(rs.getDouble("porcentaje"));
-                lista.add(c);
-            }
-     }
         return lista;
     }
 
@@ -358,35 +331,12 @@ public class EncuestaDAO {
     }
 
     private static String normalizar(String s) {
-        if (s == null) return "";
-        // Reemplaza NBSP (\u00a0) por espacio normal antes de normalizar
-        String limpio = s.replace('\u00a0', ' ').replace("\u00A0", " ");
-        String t = Normalizer.normalize(limpio, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        return t.toLowerCase().replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
+        return CalculadoraBrechas.normalizar(s);
     }
 
     /** Cuenta en cuantas respuestas de una pregunta aparece cada grupo de palabras clave. */
     public static List<ConteoPalabra> contarPalabrasClave(int pregunta) throws SQLException {
-        List<String> respuestas = obtenerRespuestasTexto(pregunta);
-        List<ConteoPalabra> res = new ArrayList<>();
-        int total = respuestas.size();
-        if (total == 0) return res;
-
-        for (Map.Entry<String, String[]> e : DICCIONARIO.entrySet()) {
-            int n = 0;
-            for (String txt : respuestas) {
-                String norm = " " + normalizar(txt) + " ";
-                for (String sin : e.getValue()) {
-                    if (norm.contains(" " + normalizar(sin) + " ")) { n++; break; }
-                }
-            }
-            if (n > 0) {
-                double pct = Math.round(1000.0 * n / total) / 10.0;
-                res.add(new ConteoPalabra(e.getKey(), n, pct));
-            }
-        }
-        res.sort((a, b) -> Integer.compare(b.getTotal(), a.getTotal()));
-        return res;
+        return CalculadoraBrechas.contarPalabrasClave(DICCIONARIO, obtenerRespuestasTexto(pregunta));
     }
 
     //  EVALUACION DE BRECHAS Y COMPETENCIAS
@@ -395,125 +345,49 @@ public class EncuestaDAO {
     }
 
     private static double porcentaje(int parte, int total) {
-        return total > 0 ? Math.round(1000.0 * parte / total) / 10.0 : 0.0;
+        return CalculadoraBrechas.porcentaje(parte, total);
     }
 
     private static double redondear1(double v) {
-        return Math.round(v * 10.0) / 10.0;
+        return CalculadoraBrechas.redondear1(v);
     }
 
-    /**
-     * Separa las opciones de una respuesta multi-seleccion.
-     * Los delimitadores reales de los datos son ';' y ',';
-     * las comas DENTRO de parentesis ("Basicas (Fisica, Calculo, Algebras)")
-     * no deben partir el elemento.
-     */
+    /** Los delimitadores reales son ';' y ','; las comas dentro de paréntesis no separan. */
     private static List<String> separarOpciones(String texto) {
-        List<String> items = new ArrayList<>();
-        if (texto == null) return items;
-        int nivel = 0;
-        StringBuilder actual = new StringBuilder();
-        for (char ch : texto.toCharArray()) {
-            if (ch == '(') nivel++;
-            if (ch == ')') nivel = Math.max(0, nivel - 1);
-            if ((ch == ';' || ch == ',' || ch == '|') && nivel == 0) {
-                String t = actual.toString().trim();
-                if (!t.isEmpty()) items.add(t);
-                actual.setLength(0);
-            } else {
-                actual.append(ch);
-            }
-        }
-        String t = actual.toString().trim();
-        if (!t.isEmpty()) items.add(t);
-        return items;
+        return CalculadoraBrechas.separarOpciones(texto);
     }
 
-    private static final String[] ETIQUETAS_LIKERT = {
-        "Totalmente en desacuerdo", "En desacuerdo", "De acuerdo", "Totalmente de Acuerdo"
-    };
+    private static final String[] ETIQUETAS_LIKERT = CalculadoraBrechas.ETIQUETAS_LIKERT;
 
     private static int valorLikert(String etiqueta) {
-        switch (etiqueta) {
-            case "Totalmente en desacuerdo": return 1;
-            case "En desacuerdo": return 2;
-            case "De acuerdo": return 3;
-            case "Totalmente de Acuerdo": return 4;
-            default: return -1;
-        }
+        return CalculadoraBrechas.valorLikert(etiqueta);
     }
 
     private static ConteoRespuesta nuevoConteo(int pregunta, String respuesta, int total, int denominador) {
-        ConteoRespuesta c = new ConteoRespuesta();
-        c.setPreguntaId(pregunta);
-        c.setRespuesta(respuesta);
-        c.setTotal(total);
-        c.setPorcentaje(porcentaje(total, denominador));
-        return c;
+        return CalculadoraBrechas.nuevoConteo(pregunta, respuesta, total, denominador);
     }
 
-    /** Media, desviacion estandar y distribucion de una escala Likert de 4 puntos. */
+    /** Media, desviación poblacional y distribución de una escala Likert de 4 puntos. */
     public static IndicadorEscala escalaIndicador(int pregunta, String etiqueta) throws SQLException {
-        IndicadorEscala ind = new IndicadorEscala();
-        ind.setPregunta(pregunta);
-        ind.setEtiqueta(etiqueta);
-
-        Map<String, Integer> conteo = new LinkedHashMap<>();
-        for (String e : ETIQUETAS_LIKERT) conteo.put(e, 0);
-
-        double suma = 0, suma2 = 0;
-        int n = 0;
+        List<String> respuestas = new ArrayList<>();
         String sql = "SELECT TRIM(respuesta) AS r FROM respuestas "
                    + "WHERE pregunta_id = ? AND respuesta IS NOT NULL AND TRIM(respuesta) <> ''";
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, pregunta);
             try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    String r = rs.getString("r");
-                    int v = valorLikert(r);
-                    if (v > 0) { suma += v; suma2 += (double) v * v; n++; }
-                    conteo.merge(r, 1, Integer::sum);
-                }
+                while (rs.next()) respuestas.add(rs.getString("r"));
             }
         }
-
-        ind.setN(n);
-        if (n > 0) {
-            double media = suma / n;
-            double var = (suma2 / n) - (media * media);
-            ind.setMedia(redondear1(media));
-            ind.setDesviacion(redondear1(Math.sqrt(Math.max(var, 0))));
-        }
-
-        int total = 0;
-        for (int c : conteo.values()) total += c;
-        List<ConteoRespuesta> dist = new ArrayList<>();
-        for (Map.Entry<String, Integer> e : conteo.entrySet()) {
-            if (e.getValue() == 0) continue;
-            dist.add(nuevoConteo(pregunta, e.getKey(), e.getValue(), total));
-        }
-        ind.setDistribucion(dist);
-        return ind;
+        return CalculadoraBrechas.indicador(pregunta, etiqueta, respuestas);
     }
 
     public static List<ConteoRespuesta> asignaturasFrecuencia(int pregunta) throws SQLException {
-        List<String> respuestas = obtenerRespuestasTexto(pregunta);
-        Map<String, Integer> conteo = new LinkedHashMap<>();
-        for (String r : respuestas)
-            for (String a : separarOpciones(r)) conteo.merge(a, 1, Integer::sum);
-
-        int total = respuestas.size();
-        List<ConteoRespuesta> lista = new ArrayList<>();
-        for (Map.Entry<String, Integer> e : conteo.entrySet())
-            lista.add(nuevoConteo(pregunta, e.getKey(), e.getValue(), total));
-        lista.sort((a, b) -> Integer.compare(b.getTotal(), a.getTotal()));
-        return lista;
+        return CalculadoraBrechas.frecuenciasAsignaturas(pregunta, obtenerRespuestasTexto(pregunta));
     }
 
-    /** Cruce entre una pregunta multiseleccion (asignaturas) y una pregunta simple. */
+    /** Cruce entre una pregunta multiselección (asignaturas) y una pregunta simple. */
     public static List<CeldaCruce> cruceAsignaturaVariable(int pAsignatura, int pVariable) throws SQLException {
-        List<CeldaCruce> lista = new ArrayList<>();
         Map<String, Map<String, Integer>> mapa = new LinkedHashMap<>();
         String sql = "SELECT a.respuesta AS asignaturas, TRIM(b.respuesta) AS variable "
                    + "FROM respuestas a JOIN respuestas b ON " + claveEnvio("b") + " = " + claveEnvio("a") + " "
@@ -525,12 +399,15 @@ public class EncuestaDAO {
             stmt.setInt(2, pVariable);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    String variable = rs.getString("variable");
-                    for (String a : separarOpciones(rs.getString("asignaturas")))
-                        mapa.computeIfAbsent(a, k -> new LinkedHashMap<>()).merge(variable, 1, Integer::sum);
+                    for (CeldaCruce c : CalculadoraBrechas.cruceAsignaturaVariable(
+                            rs.getString("asignaturas"), rs.getString("variable"))) {
+                        mapa.computeIfAbsent(c.getValorX(), k -> new LinkedHashMap<>())
+                                .merge(c.getValorY(), c.getTotal(), Integer::sum);
+                    }
                 }
             }
         }
+        List<CeldaCruce> lista = new ArrayList<>();
         for (Map.Entry<String, Map<String, Integer>> fila : mapa.entrySet())
             for (Map.Entry<String, Integer> col : fila.getValue().entrySet()) {
                 CeldaCruce c = new CeldaCruce();
@@ -571,28 +448,9 @@ public class EncuestaDAO {
             ASIG_POR_AREA.put("Contenedores (Docker/K8s)", new String[]{"Docker", "Kubernetes", "Contenedores"});
         }
 
-    private static boolean mencionaAlguna(List<String> textos, String[] claves) {
-        for (String t : textos) {
-            String norm = " " + normalizar(t) + " ";
-            for (String c : claves)
-                if (norm.contains(" " + normalizar(c) + " ")) return true;
-        }
-        return false;
-    }
-
-    private static boolean tieneAsignatura(List<String> respuestas, String[] asignaturas) {
-        for (String r : respuestas) {
-            List<String> seleccion = separarOpciones(r);
-            for (String a : asignaturas)
-                for (String s : seleccion)
-                    if (normalizar(s).equals(normalizar(a))) return true;
-        }
-        return false;
-    }
-
     // Radar de brechas:
     public static List<DimensionRadar> radarBrechas() throws SQLException {
-        //Estado Objetivo: agrupar textos del empleador por envio 
+        // Estado Objetivo: agrupar textos del empleador por envío
         Map<String, List<String>> porEmpleador = new LinkedHashMap<>();
         String sqlE = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
                     + "WHERE r.pregunta_id IN (59,60,61) AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
@@ -602,9 +460,8 @@ public class EncuestaDAO {
             while (rs.next())
                 porEmpleador.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
         }
-        int totalEmpleadores = porEmpleador.size();
 
-        //Estado Actual: asignaturas de ventaja por titulado 
+        // Estado Actual: asignaturas de ventaja por titulado
         Map<String, List<String>> porTitulado = new LinkedHashMap<>();
         String sqlT = "SELECT " + claveEnvio("r") + " AS k, TRIM(r.respuesta) AS resp FROM respuestas r "
                     + "WHERE r.pregunta_id = 42 AND r.respuesta IS NOT NULL AND TRIM(r.respuesta) <> ''";
@@ -614,27 +471,8 @@ public class EncuestaDAO {
             while (rs.next())
                 porTitulado.computeIfAbsent(rs.getString("k"), k -> new ArrayList<>()).add(rs.getString("resp"));
         }
-        int totalTitulados = porTitulado.size();
 
-        List<DimensionRadar> lista = new ArrayList<>();
-        for (Map.Entry<String, String[]> area : DICCIONARIO.entrySet()) {
-            int obj = 0;
-            for (List<String> resp : porEmpleador.values())
-                if (mencionaAlguna(resp, area.getValue())) obj++;
-
-            int act = 0;
-            String[] asigs = ASIG_POR_AREA.get(area.getKey());
-            if (asigs != null) {
-                for (List<String> resp : porTitulado.values())
-                    if (tieneAsignatura(resp, asigs)) act++;
-            }
-
-            double objetivo = porcentaje(obj, totalEmpleadores);
-            double actual = porcentaje(act, totalTitulados);
-            if (objetivo > 0 || actual > 0)
-                lista.add(new DimensionRadar(area.getKey(), objetivo, actual));
-        }
-        return lista;
+        return CalculadoraBrechas.radar(DICCIONARIO, ASIG_POR_AREA, porEmpleador, porTitulado);
     }
 
     public static List<AreaEmpleabilidad> analisisEmpleabilidad() throws SQLException {

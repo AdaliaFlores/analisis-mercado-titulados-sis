@@ -179,9 +179,14 @@
       </ul>`));
   }
 
+  let cargandoDesempleo = false;
+
   window.cargarReporteDesempleo = async function () {
     const cont = document.getElementById('contenedorDesempleo');
     if (!cont) return;
+    // Evita peticiones y renderizados duplicados si el usuario hace clics seguidos.
+    if (cargandoDesempleo) return;
+    cargandoDesempleo = true;
     cont.innerHTML = '<div class="col-12"><p class="text-muted">Cargando reporte...</p></div>';
     try {
       const res = await fetch('/api/reportes/desempleo');
@@ -215,6 +220,8 @@
       addResumen(cont, d.resumen || []);
     } catch (e) {
       cont.innerHTML = '<div class="col-12"><p class="text-danger">No se pudo cargar el reporte: ' + esc(e.message) + '</p></div>';
+    } finally {
+      cargandoDesempleo = false;
     }
   };
 

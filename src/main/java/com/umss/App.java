@@ -148,9 +148,6 @@ public class App {
         app.post("/api/import/excel/empleadores",
             EncuestaController::importarExcelEmpleadores);
 
-        app.get("/api/reportes/emprendimiento/resumen",
-            ReporteController::reporteEmprendimientoResumen);
-
         // Iniciar servidor en el puerto proporcionado por Render
         app.start("127.0.0.1", port);
 

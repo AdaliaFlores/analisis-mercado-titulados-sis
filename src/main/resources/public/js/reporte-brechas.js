@@ -180,7 +180,7 @@
   // Mapas de calor (tablas cruzadas)
   function renderHeatmaps(cont, d) {
     cont.insertAdjacentHTML('beforeend',
-      `<div class="col-12 mt-2"><h6 class="fw-bold text-warning mb-0">Tablas de frecuencia cruzada y mapas de calor</h6></div>`);
+      `<div class="col-12 mt-2"><h6 class="fw-bold text-warning mb-0">Tablas de frecuencia cruzada y mapas de calor</h6><div class="small text-muted">Conteo absoluto y porcentaje por fila, con total por asignatura.</div></div>`);
 
     insertarHeatmap(cont, 'Asignaturas con ventaja competitiva × situación laboral',
       d.cruceVentajaSituacion, 'col-12', 'Escala de color según el número de titulados que coinciden en la celda.');
@@ -211,37 +211,36 @@
     const filas = Object.keys(totalFila).sort((a, b) => totalFila[b] - totalFila[a]);
     const cols = Object.keys(totalCol).sort((a, b) => totalCol[b] - totalCol[a]);
     const totalTabla = celdas.reduce((s, c) => s + c.total, 0);
+    const max = Math.max(1, ...celdas.map(c => c.total));
 
     const valor = (x, y) => {
       const c = celdas.find(c => c.valorX === x && c.valorY === y);
       return c ? c.total : 0;
     };
-    const max = Math.max(1, ...celdas.map(c => c.total));
 
     const encabezado = cols.map(col =>
-      `<th class="small align-bottom" title="${escapar(col)}">${escapar(corto(col, 34))}</th>`).join('');
+      `<th class="small align-bottom text-end" title="${escapar(col)}">${escapar(corto(col, 34))}</th>`).join('');
+
     const cuerpo = filas.map(fila => {
-      const pctFila = totalTabla ? Math.round(100 * totalFila[fila] / totalTabla) : 0;
+      const tf = totalFila[fila];
       const celdasHtml = cols.map(col => {
         const v = valor(fila, col);
-        const alfa = v === 0 ? 0 : 0.12 + 0.78 * (v / max);
-        const texto = alfa > 0.55 ? '#fff' : '#212529';
-        const cel = v ? `${v} titulados — ${escapar(fila)} / ${escapar(col)}` : '';
-        return `<td class="small" title="${cel}" style="background:rgba(220,53,69,${alfa});color:${texto};font-weight:${v ? 600 : 400}">${v || ''}</td>`;
+        const detalle = v ? `${v} titulados — ${escapar(fila)} / ${escapar(col)}` : '';
+        return `<td class="small text-end" title="${detalle}" style="${fondoCalor(v, max)}">${v || ''}${v ? `<br><small class="text-muted">${pct1(v, tf)}%</small>` : ''}</td>`;
       }).join('');
       return `<tr><th class="text-start small" title="${escapar(fila)}">${escapar(corto(fila, 40))}</th>${celdasHtml}
-        <td class="table-secondary fw-bold">${totalFila[fila]}<div class="fw-normal text-muted" style="font-size:.7em">${pctFila}%</div></td></tr>`;
+        <td class="table-secondary text-end fw-semibold">${tf}<br><small class="text-muted">${pct1(tf, totalTabla)}%</small></td></tr>`;
     }).join('');
 
     cont.insertAdjacentHTML('beforeend', `
       <div class="${colClase}">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <h6 class="fw-bold text-warning">${titulo}</h6>
+            <h6 class="fw-bold text-warning mb-2">${titulo}</h6>
             <div class="table-responsive">
-              <table class="table table-sm table-bordered text-center align-middle mb-0">
+              <table class="table table-sm table-bordered align-middle mb-0">
                 <thead class="table-light">
-                  <tr><th class="text-start">Asignatura \\ Variable</th>${encabezado}<th class="table-secondary">Total</th></tr>
+                  <tr><th class="text-start">Asignatura \\ Variables </th>${encabezado}<th class="text-end">Total</th></tr>
                 </thead>
                 <tbody>${cuerpo}</tbody>
               </table>
@@ -250,6 +249,17 @@
           </div>
         </div>
       </div>`);
+  }
+
+  function pct1(parte, total) {
+    if (!total) return '0.0';
+    return (Number(parte) * 100 / Number(total)).toFixed(1);
+  }
+
+  function fondoCalor(valor, maximo) {
+    if (!valor || !maximo) return '';
+    const intensidad = Math.min(0.32, 0.06 + (Number(valor) / Number(maximo)) * 0.26);
+    return `background: rgba(13, 110, 253, ${intensidad.toFixed(3)});`;
   }
 
   // Demanda del empleador (texto abierto -> palabras clave)
