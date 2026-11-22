@@ -1,0 +1,20 @@
+-------------------------------------------------------------------------------
+Test set: com.umss.dao.EdicionDatosHu3Test
+-------------------------------------------------------------------------------
+Tests run: 3, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 6.502 s <<< FAILURE! -- in com.umss.dao.EdicionDatosHu3Test
+com.umss.dao.EdicionDatosHu3Test.cp02CajaBlancaBloqueoSeleccionCerrada -- Time elapsed: 3.948 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: Las preguntas de selección cerrada no deben ser modificables ==> Unexpected exception type thrown, expected: <java.lang.IllegalArgumentException> but was: <java.util.NoSuchElementException>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:67)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:39)
+	at org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3131)
+	at com.umss.dao.EdicionDatosHu3Test.cp02CajaBlancaBloqueoSeleccionCerrada(EdicionDatosHu3Test.java:31)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.util.NoSuchElementException: Respuesta no encontrada
+	at com.umss.dao.RespuestaDAO.editar(RespuestaDAO.java:48)
+	at com.umss.dao.EdicionDatosHu3Test.lambda$cp02CajaBlancaBloqueoSeleccionCerrada$2(EdicionDatosHu3Test.java:32)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:53)
+	... 6 more
+
