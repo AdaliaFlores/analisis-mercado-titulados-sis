@@ -107,37 +107,51 @@ public class ExportController {
             int filaInicio, int filaFin, 
             int colUbicacion, int filaUbicacion, int anchoCols, int altoFilas) {
 
-        XSSFSheet xssfSheet = (XSSFSheet) sh;
-        XSSFDrawing drawing = xssfSheet.createDrawingPatriarch();
+        try {
+            XSSFSheet xssfSheet = (XSSFSheet) sh;
+            XSSFDrawing drawing = dibujoHoja(xssfSheet);
 
-        XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0, 
-                colUbicacion, filaUbicacion, colUbicacion + anchoCols, filaUbicacion + altoFilas);
+            XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0,
+                    colUbicacion, filaUbicacion, colUbicacion + anchoCols, filaUbicacion + altoFilas);
 
-        XSSFChart chart = drawing.createChart(anchor);
-        chart.setTitleText(titulo);
-        chart.setTitleOverlay(false);
+            XSSFChart chart = drawing.createChart(anchor);
+            chart.setTitleText(titulo);
+            chart.setTitleOverlay(false);
 
-        XDDFChartLegend legend = chart.getOrAddLegend();
-        legend.setPosition(LegendPosition.TOP_RIGHT);
+            XDDFChartLegend legend = chart.getOrAddLegend();
+            legend.setPosition(LegendPosition.TOP_RIGHT);
 
-        XDDFCategoryAxis bottomAxis = chart.createCategoryAxis(AxisPosition.BOTTOM);
-        bottomAxis.setTitle("Categoría");
-        XDDFValueAxis leftAxis = chart.createValueAxis(AxisPosition.LEFT);
-        leftAxis.setTitle("Valor");
-        leftAxis.setCrossBetween(AxisCrossBetween.BETWEEN);
-        XDDFDataSource<String> xs = XDDFDataSourcesFactory.fromStringCellRange(
-                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colCategorias, colCategorias));
-        
-        XDDFNumericalDataSource<Double> ys = XDDFDataSourcesFactory.fromNumericCellRange(
-                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colValores, colValores));
+            XDDFCategoryAxis bottomAxis = chart.createCategoryAxis(AxisPosition.BOTTOM);
+            bottomAxis.setTitle("Categoría");
+            XDDFValueAxis leftAxis = chart.createValueAxis(AxisPosition.LEFT);
+            leftAxis.setTitle("Valor");
+            leftAxis.setCrossBetween(AxisCrossBetween.BETWEEN);
+            XDDFDataSource<String> xs = XDDFDataSourcesFactory.fromStringCellRange(
+                    xssfSheet, new CellRangeAddress(filaInicio, filaFin, colCategorias, colCategorias));
 
-        XDDFBarChartData data = (XDDFBarChartData) chart.createData(ChartTypes.BAR, bottomAxis, leftAxis);
-        data.setBarDirection(BarDirection.COL);
-        
-        XDDFBarChartData.Series series = (XDDFBarChartData.Series) data.addSeries(xs, ys);
-        series.setTitle("Total", null);
-        
-        chart.plot(data);
+            XDDFNumericalDataSource<Double> ys = XDDFDataSourcesFactory.fromNumericCellRange(
+                    xssfSheet, new CellRangeAddress(filaInicio, filaFin, colValores, colValores));
+
+            XDDFBarChartData data = (XDDFBarChartData) chart.createData(ChartTypes.BAR, bottomAxis, leftAxis);
+            data.setBarDirection(BarDirection.COL);
+
+            XDDFBarChartData.Series series = (XDDFBarChartData.Series) data.addSeries(xs, ys);
+            series.setTitle("Total", null);
+
+            chart.plot(data);
+        } catch (RuntimeException ex) {
+            // Un gráfico defectuoso no debe invalidar todo el libro: se omite y queda registrado.
+            System.err.println("Aviso: no se pudo crear el gráfico '" + titulo + "': " + ex);
+        }
+    }
+
+    /**
+     * Devuelve el dibujo (drawing) único de la hoja. Llamar a createDrawingPatriarch()
+     * por cada gráfico puede crear/reemplazar partes de dibujo y romper el .xlsx al escribir.
+     */
+    private static XSSFDrawing dibujoHoja(XSSFSheet hoja) {
+        XSSFDrawing drawing = hoja.getDrawingPatriarch();
+        return drawing != null ? drawing : hoja.createDrawingPatriarch();
     }
 
     /**
@@ -150,34 +164,38 @@ public class ExportController {
             int filaInicio, int filaFin, 
             int colUbicacion, int filaUbicacion, int anchoCols, int altoFilas) {
 
-        XSSFSheet xssfSheet = (XSSFSheet) sh;
-        XSSFDrawing drawing = xssfSheet.createDrawingPatriarch();
+        try {
+            XSSFSheet xssfSheet = (XSSFSheet) sh;
+            XSSFDrawing drawing = dibujoHoja(xssfSheet);
 
-        XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0, 
-                colUbicacion, filaUbicacion, colUbicacion + anchoCols, filaUbicacion + altoFilas);
+            XSSFClientAnchor anchor = drawing.createAnchor(0, 0, 0, 0,
+                    colUbicacion, filaUbicacion, colUbicacion + anchoCols, filaUbicacion + altoFilas);
 
-        XSSFChart chart = drawing.createChart(anchor);
-        chart.setTitleText(titulo);
-        chart.setTitleOverlay(false);
+            XSSFChart chart = drawing.createChart(anchor);
+            chart.setTitleText(titulo);
+            chart.setTitleOverlay(false);
 
-        // Leyenda a la derecha
-        XDDFChartLegend legend = chart.getOrAddLegend();
-        legend.setPosition(LegendPosition.RIGHT);
+            // Leyenda a la derecha
+            XDDFChartLegend legend = chart.getOrAddLegend();
+            legend.setPosition(LegendPosition.RIGHT);
 
-        // Rango de datos (Los gráficos de pastel no requieren declarar ejes Category/Value Axis)
-        XDDFDataSource<String> xs = XDDFDataSourcesFactory.fromStringCellRange(
-                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colCategorias, colCategorias));
-        
-        XDDFNumericalDataSource<Double> ys = XDDFDataSourcesFactory.fromNumericCellRange(
-                xssfSheet, new CellRangeAddress(filaInicio, filaFin, colValores, colValores));
+            // Rango de datos (Los gráficos de pastel no requieren declarar ejes Category/Value Axis)
+            XDDFDataSource<String> xs = XDDFDataSourcesFactory.fromStringCellRange(
+                    xssfSheet, new CellRangeAddress(filaInicio, filaFin, colCategorias, colCategorias));
 
-        XDDFPieChartData data = (XDDFPieChartData) chart.createData(ChartTypes.PIE, null, null);
-        data.setVaryColors(true); // Asigna colores variados a cada tajada
-        
-        XDDFPieChartData.Series series = (XDDFPieChartData.Series) data.addSeries(xs, ys);
-        series.setTitle(titulo, null);
-        
-        chart.plot(data);
+            XDDFNumericalDataSource<Double> ys = XDDFDataSourcesFactory.fromNumericCellRange(
+                    xssfSheet, new CellRangeAddress(filaInicio, filaFin, colValores, colValores));
+
+            XDDFPieChartData data = (XDDFPieChartData) chart.createData(ChartTypes.PIE, null, null);
+            data.setVaryColors(true); // Asigna colores variados a cada tajada
+
+            XDDFPieChartData.Series series = (XDDFPieChartData.Series) data.addSeries(xs, ys);
+            series.setTitle(titulo, null);
+
+            chart.plot(data);
+        } catch (RuntimeException ex) {
+            System.err.println("Aviso: no se pudo crear el gráfico '" + titulo + "': " + ex);
+        }
     }
 
     /** Gráfico de radar (telaraña) para el análisis de brechas. */
@@ -211,7 +229,7 @@ public class ExportController {
     private static void insertarImagen(Workbook wb, Sheet sh, byte[] png, int col1, int row1, int col2, int row2) {
         if (png == null || png.length == 0) return;
         int idx = wb.addPicture(png, Workbook.PICTURE_TYPE_PNG);
-        XSSFDrawing drawing = ((org.apache.poi.xssf.usermodel.XSSFSheet) sh).createDrawingPatriarch();
+        XSSFDrawing drawing = dibujoHoja((org.apache.poi.xssf.usermodel.XSSFSheet) sh);
         XSSFClientAnchor anchor = new XSSFClientAnchor(0, 0, 0, 0, col1, row1, col2, row2);
         drawing.createPicture(anchor, idx);
     }
@@ -227,59 +245,48 @@ public class ExportController {
             // Reemplaza tu método exportCsv por este:
         public static void exportCsv(Context ctx) {
             String tipo = ctx.queryParam("tipo");
-            if (tipo == null) tipo = "brechas";
-            String filename = "reporte_" + tipo + "_" + System.currentTimeMillis() + ".csv";
-            
-            // 1. Generar CSV
-            String csvOriginal = reformatearCsv(generarCsv(tipo));
-            
-            // 2. CORRECCIÓN AUTOMÁTICA DE CORRUPCIÓN DE ENCODING (MOJIBAKE)
-            String csvCorregido = repararEncoding(csvOriginal);
-            
-            ctx.res().setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-            ctx.res().setContentType("text/csv; charset=UTF-8");
-            ctx.res().setCharacterEncoding("UTF-8");
+            if (tipo == null || tipo.isBlank()) tipo = "brechas";
             try {
+                // 1. Generar CSV
+                String csvOriginal = reformatearCsv(generarCsv(tipo));
+
+                // 2. CORRECCIÓN AUTOMÁTICA DE CORRUPCIÓN DE ENCODING (MOJIBAKE)
+                String csvCorregido = repararEncoding(csvOriginal);
+
+                String filename = "reporte_" + tipo + "_" + System.currentTimeMillis() + ".csv";
+                ctx.res().setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+                ctx.res().setContentType("text/csv; charset=UTF-8");
+                ctx.res().setCharacterEncoding("UTF-8");
+
                 // BOM UTF-8 para Excel
                 byte[] bom = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
                 ctx.result(new java.io.ByteArrayInputStream(concat(bom, csvCorregido.getBytes(StandardCharsets.UTF_8))));
             } catch (Exception e) {
-                ctx.status(500).result("Error al generar CSV: " + e.getMessage());
+                e.printStackTrace();
+                ctx.status(500).result("Error al generar CSV: " + mensajeError(e));
             }
         }
 
-// Agrega esta función auxiliar al final de la clase ExportController.java:
-        private static String repararEncoding(String texto) {
+    static String repararEncoding(String texto) {
             if (texto == null) return "";
-            return texto
-                .replace("Ã“", "Ó")
-                .replace("Ã³", "ó")
-                .replace("Ã\u0081", "Á")
-                .replace("Ã¡", "á")
-                .replace("Ã‰", "É")
-                .replace("Ã©", "é")
-                .replace("Ã\u008D", "Í")
-                .replace("Ã*", "Í")
-                .replace("Ã*", "í")
-                .replace("Ã­", "í")
-                .replace("Ãš", "Ú")
-                .replace("Ãº", "ú")
-                .replace("Ã‘", "Ñ")
-                .replace("Ã±", "ñ")
-                .replace("Ã", "Í") // Casos aislados como SÃ -> SÍ o hipÃ³tesis
-                .replace("Í³", "ó")
-                .replace("Í\u0081", "Á")
-                .replace("Í¡", "á")
-                .replace("Í‰", "É")
-                .replace("Í©", "é")
-                .replace("Í*", "Í")
-                .replace("Í­", "í")
-                .replace("Íš", "Ú")
-                .replace("Íº", "ú")
-                .replace("Í‘", "Ñ")
-                .replace("Í±", "ñ")
-                .replace("ïˆò", "²")
-                .replace("ï†²", "²");
+            String limpio = texto
+                .replace("Ã“", "O").replace("Ã³", "o")
+                .replace("Ã\u0081", "A").replace("Ã¡", "a")
+                .replace("Ã‰", "E").replace("Ã©", "e")
+                .replace("Ã\u008D", "I").replace("Ã*", "I").replace("Ã­", "i")
+                .replace("Ãš", "U").replace("Ãº", "u")
+                .replace("Ã‘", "N").replace("Ã±", "n")
+                .replace("Ã", "I")
+                .replace("Í³", "o").replace("Í\u0081", "A").replace("Í¡", "a")
+                .replace("Í‰", "E").replace("Í©", "e").replace("Í*", "I").replace("Í­", "i")
+                .replace("Íš", "U").replace("Íº", "u").replace("Í‘", "N").replace("Í±", "n")
+                .replace("ïˆò", "2").replace("ï†²", "2")
+                .replace("χ²", "Chi2");
+
+            // Eliminar cualquier tilde o diacrítico restante para máxima compatibilidad en Excel CSV
+            String sinTildes = java.text.Normalizer.normalize(limpio, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+            return sinTildes;
         }
 
     private static byte[] concat(byte[] a, byte[] b) {
@@ -290,7 +297,7 @@ public class ExportController {
     }
 
     /**Adapta el CSV (comas + punto decimal) al formato que Excel espera según el locales*/
-    private static String reformatearCsv(String csv) {
+    static String reformatearCsv(String csv) {
         StringBuilder out = new StringBuilder();
         if (LIST_SEP == ';') out.append("sep=;\r\n");
         StringBuilder campo = new StringBuilder();
@@ -317,7 +324,7 @@ public class ExportController {
     }
 
     /** Convierte el punto decimal a coma en campos puramente numéricos cuando el locale lo requiere. */
-    private static String convertirCampo(String f) {
+    static String convertirCampo(String f) {
         if (DEC_SEP == ',') {
             String t = f.trim();
             if (t.matches("-?\\d+\\.\\d+")) return f.replace('.', ',');
@@ -349,26 +356,67 @@ public class ExportController {
                 case "formacion" -> {
                     sb.append("=== FORMACIÓN CONTINUA Y MECANISMOS DE FINANCIAMIENTO ===\r\n\r\n");
 
-                    // Áreas de interés (p9)
-                    sb.append("=== ÁREAS DE INTERÉS DE POSGRADO (p9) - DECLARADAS POR EL TITULADO ===\r\n");
-                    sb.append("AREA_DE_INTERES,n,f_i(%)\r\n");
-                    List<AreaInteresPosgrado> areasP9 = EncuestaDAO.areasInteresPosgrado();
-                    int Np9 = 0;
-                    for (AreaInteresPosgrado a : areasP9) Np9 += a.getN();
-                    for (AreaInteresPosgrado a : areasP9) {
-                        sb.append(csv(a.getArea())).append(",").append(a.getN()).append(",").append(DF2.format(a.getPorcentaje())).append("\r\n");
-                    }
-                    if (Np9 > 0) {
-                        long top1 = areasP9.isEmpty() ? 0 : areasP9.get(0).getN();
-                        long top2 = areasP9.size() < 2 ? top1 : top1 + areasP9.get(1).getN();
-                        double pctTop2 = (top2 * 100.0 / (double) Np9);
-                        // FIX: Se usan operadores estándar >= y -> para evitar distorsión en Excel
-                        sb.append("\r\nALERTA DE CONCENTRACIÓN CRÍTICA DE MERCADO: Suma Top 2 = ").append(top2).append("/").append(Np9).append(" (").append(DF2.format(pctTop2)).append("%) | Umbral >= 70%").append(pctTop2 >= 70.0 ? " -> SÍ (CRÍTICA)" : " -> NO").append("\r\n\r\n");
+                    // 1. Tabla cruzada: Área de interés (p9) x Nivel de posgrado deseado (p4)
+                    sb.append("=== TABLA CRUZADA: ÁREA DE INTERÉS (p9) x NIVEL DE POSGRADO DESEADO (p4) ===\r\n");
+                    var cruceAN = EncuestaDAO.cruceAreaNivel();
+                    var nivelesOrden = List.of("DIPLOMADO", "MAESTRIA", "ESPECIALIDAD", "DOCTORADO");
+                    var matrizAN = new LinkedHashMap<String, Map<String, Integer>>();
+                    var totFilaAN = new LinkedHashMap<String, Integer>();
+                    int granTotalAN = 0;
+
+                    for (Object obj : cruceAN) {
+                        Map row = (Map) obj;
+                        String area = String.valueOf(row.get("area"));
+                        String nivel = String.valueOf(row.get("nivel")).toUpperCase();
+                        int tot = ((Number) row.get("total")).intValue();
+                        matrizAN.computeIfAbsent(area, k -> new LinkedHashMap<>()).put(nivel, tot);
+                        totFilaAN.put(area, totFilaAN.getOrDefault(area, 0) + tot);
+                        granTotalAN += tot;
                     }
 
-                    sb.append("=== NIVEL/TIPO DE POSGRADO DESEADO (p4) - TITULADOS ===\r\n");
+                    var areasOrdenadas = new ArrayList<String>(totFilaAN.keySet());
+                    areasOrdenadas.sort((a, b) -> Integer.compare(totFilaAN.get(b), totFilaAN.get(a)));
+
+                    sb.append("AREA_DE_INTERES");
+                    for (String niv : nivelesOrden) sb.append(",").append(niv);
+                    sb.append(",TOTAL\r\n");
+
+                    int[] totColAN = new int[nivelesOrden.size()];
+                    for (String area : areasOrdenadas) {
+                        sb.append(csv(area));
+                        Map<String, Integer> filaMap = matrizAN.getOrDefault(area, Collections.emptyMap());
+                        for (int j = 0; j < nivelesOrden.size(); j++) {
+                            int val = filaMap.getOrDefault(nivelesOrden.get(j), 0);
+                            totColAN[j] += val;
+                            sb.append(",").append(val);
+                        }
+                        sb.append(",").append(totFilaAN.getOrDefault(area, 0)).append("\r\n");
+                    }
+                    sb.append("TOTAL_GENERAL");
+                    for (int j = 0; j < nivelesOrden.size(); j++) sb.append(",").append(totColAN[j]);
+                    sb.append(",").append(granTotalAN).append("\r\n\r\n");
+
+                    // 2. Preferencia institucional: Nivel de Posgrado (p4) x Organización / Institución (p10)
+                    sb.append("=== PREFERENCIA INSTITUCIONAL: NIVEL DE POSGRADO (p4) x ORGANIZACIÓN / INSTITUCIÓN (p10) ===\r\n");
+                    sb.append("NIVEL_DE_POSGRADO,ORGANIZACION_INSTITUCION,FRECUENCIA,%\r\n");
+                    var cruceNO = EncuestaDAO.cruceNivelOrganizacion(10);
+                    int totalNO = 0;
+                    for (Object obj : cruceNO) {
+                        Map row = (Map) obj;
+                        int freq = ((Number) row.get("total")).intValue();
+                        double pct = ((Number) row.get("porcentaje")).doubleValue();
+                        totalNO += freq;
+                        sb.append(csv(String.valueOf(row.get("nivel")))).append(",")
+                          .append(csv(String.valueOf(row.get("organizacion")))).append(",")
+                          .append(freq).append(",")
+                          .append(DF2.format(pct)).append("\r\n");
+                    }
+                    sb.append("TOTAL,,").append(totalNO).append(",100.00\r\n\r\n");
+
+                    // 3. Nivel de formación deseado (p4) - Frecuencias
+                    sb.append("=== NIVEL DE FORMACIÓN DESEADO (p4) - FRECUENCIAS ===\r\n");
                     sb.append("NIVEL_DESEADO,TOTAL,%\r\n");
-                    List<ConteoRespuesta> nivP4 = EncuestaDAO.nivelesFormacionDeseados();
+                    var nivP4 = EncuestaDAO.nivelesFormacionDeseados();
                     int Nn4 = 0;
                     for (ConteoRespuesta c : nivP4) Nn4 += c.getTotal();
                     for (ConteoRespuesta c : nivP4) {
@@ -377,32 +425,40 @@ public class ExportController {
                     }
                     sb.append("\r\n");
 
-                    Map<String, Object> fin = EncuestaDAO.tablaFinanciamiento();
-                    @SuppressWarnings("unchecked") List<String> filasF = (List<String>) fin.get("filas");
-                    @SuppressWarnings("unchecked") List<String> colsF = (List<String>) fin.get("columnas");
-                    @SuppressWarnings("unchecked") List<CeldaCruce> celdasF = (List<CeldaCruce>) fin.get("celdas");
-                    sb.append("=== MATRIZ DE CONTINGENCIA: NIVEL DE POSGRADO DESEADO (p4) x FUENTE DE FINANCIAMIENTO (p6) ===\r\n");
+                    // 4. Mecanismos de financiamiento: Matriz de contingencia (p4 x p6)
+                    var fin = EncuestaDAO.tablaFinanciamiento();
+                    var filasF = (List) fin.get("filas");
+                    var colsF = (List) fin.get("columnas");
+                    var celdasF = (List) fin.get("celdas");
+                    sb.append("=== MECANISMOS DE FINANCIAMIENTO: MATRIZ DE CONTINGENCIA (p4 x p6) ===\r\n");
                     sb.append("NIVEL/FUENTE_DE_FINANCIAMIENTO");
-                    for (String c : colsF) sb.append(",").append(csv(c));
+                    for (Object c : colsF) sb.append(",").append(csv(String.valueOf(c)));
                     sb.append(",TOTAL_FILA\r\n");
-                    Map<String, Integer> tfMap = new LinkedHashMap<>();
-                    for (CeldaCruce cc : celdasF) tfMap.put(cc.getValorX(), tfMap.getOrDefault(cc.getValorX(), 0) + cc.getTotal());
-                    for (String f : filasF) {
+                    var tfMap = new LinkedHashMap<String, Integer>();
+                    for (Object obj : celdasF) {
+                        CeldaCruce cc = (CeldaCruce) obj;
+                        tfMap.put(cc.getValorX(), tfMap.getOrDefault(cc.getValorX(), 0) + cc.getTotal());
+                    }
+                    for (Object fObj : filasF) {
+                        String f = String.valueOf(fObj);
                         sb.append(csv(f));
-                        for (String c : colsF) {
-                            sb.append(",").append(getCelda(celdasF, f, c));
+                        for (Object cObj : colsF) {
+                            sb.append(",").append(getCelda((List<CeldaCruce>) celdasF, f, String.valueOf(cObj)));
                         }
                         sb.append(",").append(tfMap.getOrDefault(f, 0)).append("\r\n");
                     }
                     sb.append("TOTAL_COLUMNA");
-                    Map<String, Integer> tcMap = new LinkedHashMap<>();
-                    for (CeldaCruce cc : celdasF) tcMap.put(cc.getValorY(), tcMap.getOrDefault(cc.getValorY(), 0) + cc.getTotal());
+                    var tcMap = new LinkedHashMap<String, Integer>();
+                    for (Object obj : celdasF) {
+                        CeldaCruce cc = (CeldaCruce) obj;
+                        tcMap.put(cc.getValorY(), tcMap.getOrDefault(cc.getValorY(), 0) + cc.getTotal());
+                    }
                     long NTotF = 0;
                     for (Integer v : tcMap.values()) NTotF += v;
-                    for (String c : colsF) sb.append(",").append(tcMap.getOrDefault(c, 0));
+                    for (Object cObj : colsF) sb.append(",").append(tcMap.getOrDefault(String.valueOf(cObj), 0));
                     sb.append(",").append(NTotF).append("\r\n\r\n");
 
-                    // FIX: Chi-cuadrado y p-valor en texto plano estándar
+                    // 5. Diagnóstico estadístico Chi-cuadrado
                     ResultadoChi2 rchi = (ResultadoChi2) fin.get("chi2");
                     Boolean tieneDatosF = (Boolean) fin.get("tieneDatos");
                     if (rchi != null) {
@@ -416,44 +472,92 @@ public class ExportController {
                     }
                 }
                 case "empleabilidad" -> {
-                    sb.append("=== EMPLEABILIDAD Y OFERTAS CON POCA DEMANDA ===\r\n\r\n");
+                    sb.append("=== ANALISIS DE EMPLEABILIDAD Y BARRERAS DE INSERCION ===\r\n\r\n");
 
-                    // Empleabilidad
-                    sb.append("=== ÁREAS CON MAYOR EMPLEABILIDAD (Demanda + Interés) ===\r\n");
+                    // 1. Estadísticos de Antigüedad Profesional (p12)
+                    sb.append("=== ESTADISTICOS DE ANTIGUEDAD PROFESIONAL ===\r\n");
+                    sb.append("INDICADOR,VALOR\r\n");
+                    var respP12 = EncuestaDAO.contarRespuestas(12);
+                    var valsAnt = new ArrayList<Double>();
+                    var freqAnt = new LinkedHashMap<Double, Integer>();
+                    for (ConteoRespuesta c : respP12) {
+                        if (c.getRespuesta() == null) continue;
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+(?:[.,]\\d+)?)").matcher(c.getRespuesta());
+                        if (m.find()) {
+                            double v = Double.parseDouble(m.group(1).replace(',', '.'));
+                            int tot = c.getTotal();
+                            freqAnt.put(v, freqAnt.getOrDefault(v, 0) + tot);
+                            for (int i = 0; i < tot; i++) valsAnt.add(v);
+                        }
+                    }
+                    Collections.sort(valsAnt);
+                    int nValid = valsAnt.size();
+                    double sumaAnt = 0;
+                    for (double v : valsAnt) sumaAnt += v;
+                    double mediaAnt = nValid == 0 ? 0.0 : sumaAnt / nValid;
+                    double medianaAnt = 0.0;
+                    if (nValid > 0) {
+                        medianaAnt = (nValid % 2 == 1)
+                                ? valsAnt.get(nValid / 2)
+                                : (valsAnt.get(nValid / 2 - 1) + valsAnt.get(nValid / 2)) / 2.0;
+                    }
+                    double modaAnt = 0.0;
+                    int maxFreqAnt = -1;
+                    for (var entry : freqAnt.entrySet()) {
+                        if (entry.getValue() > maxFreqAnt) {
+                            maxFreqAnt = entry.getValue();
+                            modaAnt = entry.getKey();
+                        }
+                    }
+                    double sumSq = 0;
+                    for (double v : valsAnt) sumSq += Math.pow(v - mediaAnt, 2);
+                    double desvAnt = nValid > 1 ? Math.sqrt(sumSq / (nValid - 1)) : 0.0;
+
+                    sb.append("Titulados validos,").append(nValid).append("\r\n");
+                    sb.append("Media (anios),").append(DF2.format(mediaAnt)).append("\r\n");
+                    sb.append("Mediana (anios),").append(DF2.format(medianaAnt)).append("\r\n");
+                    sb.append("Moda (anios),").append(DF2.format(modaAnt)).append("\r\n");
+                    sb.append("Desv. Estandar (anios),").append(DF2.format(desvAnt)).append("\r\n\r\n");
+
+                    // 2. Demanda de Empresas vs. Interés de Graduados
+                    sb.append("=== DEMANDA DE EMPRESAS VS. INTERES DE GRADUADOS ===\r\n");
                     sb.append("AREA,DEMANDA_EMPLEADOR(%),INTERES_TITULADOS(%),EMPLEABILIDAD(%),ORDEN\r\n");
-                    List<AreaEmpleabilidad> aeList = EncuestaDAO.analisisEmpleabilidad();
+                    var aeList = EncuestaDAO.analisisEmpleabilidad();
                     int ord = 1;
                     for (AreaEmpleabilidad a : aeList) {
-                        sb.append(csv(a.getArea())).append(",").append(a.getDemandaEmpleador()).append(",").append(a.getInteresTitulados()).append(",").append(a.getEmpleabilidad()).append(",").append(ord++).append("\r\n");
+                        sb.append(csv(a.getArea())).append(",")
+                          .append(DF2.format(a.getDemandaEmpleador())).append(",")
+                          .append(DF2.format(a.getInteresTitulados())).append(",")
+                          .append(DF2.format(a.getEmpleabilidad())).append(",")
+                          .append(ord++).append("\r\n");
                     }
                     sb.append("\r\n");
 
-                    // Razones críticas
-                    sb.append("=== OFERTA CON POCA DEMANDA - RAZONES CRÍTICAS (p28) ===\r\n");
+                    // 3. Motivos Principales de Desempleo (p28 - todas las razones, igual al modal)
+                    sb.append("=== MOTIVOS PRINCIPALES DE DESEMPLEO (p28) ===\r\n");
                     sb.append("RAZON,TOTAL,%\r\n");
-                    List<ConteoRespuesta> crit = razonesCriticas();
-                    int Ncrit = 0;
-                    for (ConteoRespuesta c : crit) Ncrit += c.getTotal();
-                    for (ConteoRespuesta c : crit) {
-                        double pct = Ncrit == 0 ? 0.0 : (c.getTotal() * 100.0 / Ncrit);
+                    var motivos28 = EncuestaDAO.contarRespuestas(28);
+                    int nMot = 0;
+                    for (ConteoRespuesta c : motivos28) nMot += c.getTotal();
+                    for (ConteoRespuesta c : motivos28) {
+                        double pct = nMot == 0 ? 0.0 : (c.getTotal() * 100.0 / nMot);
                         sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
                     }
                     sb.append("\r\n");
 
-                    // Asignaturas poca utilidad 
-                    sb.append("=== ASIGNATURAS CON POCA UTILIDAD EN EL CAMPO LABORAL (p44) - TOP ===\r\n");
-                    sb.append("ASIGNATURA,TOTAL,%\r\n");
-                    List<ConteoRespuesta> asig44 = asignaturasPocaTop(15);
-                    int Na44 = 0;
-                    for (ConteoRespuesta c : asig44) Na44 += c.getTotal();
+                    // 4. Materias con Menor Impacto Laboral (p44 - usando % de titulados del DAO)
+                    sb.append("=== MATERIAS CON MENOR IMPACTO LABORAL (p44) ===\r\n");
+                    sb.append("ASIGNATURA,TOTAL,%_TITULADOS\r\n");
+                    var asig44 = EncuestaDAO.asignaturasFrecuencia(44);
                     for (ConteoRespuesta c : asig44) {
-                        double pct = Na44 == 0 ? 0.0 : (c.getTotal() * 100.0 / Na44);
-                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
+                        sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(c.getPorcentaje())).append("\r\n");
                     }
                     sb.append("\r\n");
-                    sb.append("=== RUBROS DE INVERSIÓN / REQUERIMIENTOS (p53) ===\r\n");
-                    sb.append("OPCIÓN,TOTAL,%\r\n");
-                    List<ConteoRespuesta> p53 = EncuestaDAO.contarRespuestas(53);
+
+                    // 5. Perfil del Sector Empresarial - Rubro principal (p53)
+                    sb.append("=== PERFIL DEL SECTOR EMPRESARIAL: RUBRO PRINCIPAL (p53) ===\r\n");
+                    sb.append("RUBRO,TOTAL,%\r\n");
+                    var p53 = EncuestaDAO.contarRespuestas(53);
                     int N53 = 0;
                     for (ConteoRespuesta c : p53) N53 += c.getTotal();
                     for (ConteoRespuesta c : p53) {
@@ -461,15 +565,29 @@ public class ExportController {
                         sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
                     }
                     sb.append("\r\n");
-                    sb.append("=== POSIBILIDAD DE CONTRATACIÓN DE TITULADOS (p55) ===\r\n");
-                    sb.append("OPCIÓN,TOTAL,%\r\n");
-                    List<ConteoRespuesta> p55 = EncuestaDAO.contarRespuestas(55);
+
+                    // 6. Perfil del Sector Empresarial - Posibilidad de incorporar (p55)
+                    sb.append("=== PERFIL DEL SECTOR EMPRESARIAL: POSIBILIDAD DE INCORPORAR (p55) ===\r\n");
+                    sb.append("OPCION,TOTAL,%\r\n");
+                    var p55 = EncuestaDAO.contarRespuestas(55);
                     int N55 = 0;
                     for (ConteoRespuesta c : p55) N55 += c.getTotal();
                     for (ConteoRespuesta c : p55) {
                         double pct = N55 == 0 ? 0.0 : (c.getTotal() * 100.0 / N55);
                         sb.append(csv(c.getRespuesta())).append(",").append(c.getTotal()).append(",").append(DF2.format(pct)).append("\r\n");
                     }
+                    sb.append("\r\n");
+
+                    // 7. Resumen y recomendación (igual al modal)
+                    sb.append("=== RESUMEN Y RECOMENDACION ===\r\n");
+                    StringBuilder topAreas = new StringBuilder();
+                    for (int i = 0; i < aeList.size(); i++) {
+                        AreaEmpleabilidad a = aeList.get(i);
+                        if (i > 0) topAreas.append(", ");
+                        topAreas.append(a.getArea()).append(" ").append(DF2.format(a.getEmpleabilidad())).append("%");
+                    }
+                    sb.append(csv("Areas con mayor empleabilidad: " + topAreas)).append("\r\n");
+                    sb.append(csv("Oferta con poca demanda: priorizar revision de las razones criticas, las asignaturas de poca utilidad y la posibilidad real de contratacion, cruzando con las areas de mayor empleabilidad.")).append("\r\n");
                 }
                 case "ubicacion" -> {
                     sb.append("=== PERTINENCIA CURRICULAR, GEOGRAFÍA Y FUGA DE TALENTOS (HU11) ===\r\n\r\n");
@@ -538,7 +656,8 @@ public class ExportController {
                 default -> sb.append("TIPO DE REPORTE NO SOPORTADO: ").append(csv(tipo)).append("\r\n");
             }
         } catch (Exception e) {
-           sb.append("ERROR AL EXPORTAR: ").append(csv(e.getMessage())).append("\r\n");
+            // No se devuelve un CSV con una línea de error: se informa el fallo real.
+            throw new RuntimeException("No se pudo construir el reporte '" + tipo + "': " + mensajeError(e), e);
         }
         return sb.toString();
     }
@@ -1125,17 +1244,28 @@ public class ExportController {
 
     // EXCEL
 
-    public static void exportExcel(Context ctx) throws IOException {
+    public static void exportExcel(Context ctx) {
         String tipo = ctx.queryParam("tipo");
-        if (tipo == null) tipo = "brechas";
-        Workbook wb = generarExcel(tipo);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        wb.write(baos);
-        wb.close();
-        String filename = "reporte_" + tipo + "_" + System.currentTimeMillis() + ".xlsx";
-        ctx.res().setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        ctx.res().setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        ctx.result(new java.io.ByteArrayInputStream(baos.toByteArray()));
+        if (tipo == null || tipo.isBlank()) tipo = "brechas";
+        try (Workbook wb = generarExcel(tipo);
+             ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            wb.write(baos);
+            String filename = "reporte_" + tipo + "_" + System.currentTimeMillis() + ".xlsx";
+            ctx.res().setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+            ctx.res().setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            ctx.result(new java.io.ByteArrayInputStream(baos.toByteArray()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            ctx.status(500).result("Error al generar Excel: " + mensajeError(e));
+        }
+    }
+
+    /** Devuelve el mensaje de la causa raíz para poder mostrarlo en la interfaz. */
+    static String mensajeError(Throwable e) {
+        Throwable causa = e;
+        while (causa.getCause() != null && causa.getCause() != causa) causa = causa.getCause();
+        String msg = causa.getMessage();
+        return (msg == null || msg.isBlank()) ? causa.getClass().getSimpleName() : msg;
     }
 
     private static Workbook generarExcel(String tipo) throws IOException {
@@ -1309,87 +1439,291 @@ public class ExportController {
                             sh, rowIdx, headerStyle, analisisDesempleo());
                 }
                 case "formacion" -> {
+                    final int COL_GRAFICO = 8;
+                    final int ANCHO_GRAFICO = 6;
+                    int filaGrafico = 2;
                     rowIdx++;
-                    Row rhp9 = sh.createRow(rowIdx++);
-                    rhp9.createCell(0).setCellValue("ÁREA DE INTERÉS DE POSGRADO (p9)");
-                    rhp9.createCell(1).setCellValue("n");
-                    rhp9.createCell(2).setCellValue("f_i (%)");
-                    styleRow(rhp9, headerStyle);
-                    List<AreaInteresPosgrado> ap9 = EncuestaDAO.areasInteresPosgrado();
-                    for (AreaInteresPosgrado a : ap9) {
+
+                    // =====================================================================
+                    // 1. TABLA CRUZADA: ÁREA DE INTERÉS (p9) x NIVEL DE POSGRADO (p4)
+                    // =====================================================================
+                    Row rTit1 = sh.createRow(rowIdx++);
+                    rTit1.createCell(0).setCellValue("1. TABLA CRUZADA: ÁREA DE INTERÉS (p9) × NIVEL DE POSGRADO DESEADO (p4)");
+                    styleRow(rTit1, headerStyle);
+
+                    var cruceAN = EncuestaDAO.cruceAreaNivel();
+                    var nivelesOrden = List.of("DIPLOMADO", "MAESTRIA", "ESPECIALIDAD", "DOCTORADO");
+                    var matrizAN = new LinkedHashMap<String, Map<String, Integer>>();
+                    var totFilaAN = new LinkedHashMap<String, Integer>();
+                    int granTotalAN = 0;
+
+                    for (Object obj : cruceAN) {
+                        Map row = (Map) obj;
+                        String area = String.valueOf(row.get("area"));
+                        String nivel = String.valueOf(row.get("nivel")).toUpperCase();
+                        int tot = ((Number) row.get("total")).intValue();
+                        matrizAN.computeIfAbsent(area, k -> new LinkedHashMap<>()).put(nivel, tot);
+                        totFilaAN.put(area, totFilaAN.getOrDefault(area, 0) + tot);
+                        granTotalAN += tot;
+                    }
+
+                    var areasOrdenadas = new ArrayList<String>(totFilaAN.keySet());
+                    areasOrdenadas.sort((a, b) -> Integer.compare(totFilaAN.get(b), totFilaAN.get(a)));
+
+                    Row rHead1 = sh.createRow(rowIdx++);
+                    rHead1.createCell(0).setCellValue("ÁREA DE INTERÉS");
+                    for (int j = 0; j < nivelesOrden.size(); j++) {
+                        rHead1.createCell(j + 1).setCellValue(nivelesOrden.get(j));
+                    }
+                    rHead1.createCell(nivelesOrden.size() + 1).setCellValue("TOTAL");
+                    styleRow(rHead1, headerStyle);
+
+                    int inicioTabla1 = rowIdx;
+                    int[] totColAN = new int[nivelesOrden.size()];
+                    for (String area : areasOrdenadas) {
                         Row rr = sh.createRow(rowIdx++);
-                        rr.createCell(0).setCellValue(a.getArea());
-                        rr.createCell(1).setCellValue(a.getN());
-                        rr.createCell(2).setCellValue(a.getPorcentaje());
+                        rr.createCell(0).setCellValue(area);
+                        Map<String, Integer> filaMap = matrizAN.getOrDefault(area, Collections.emptyMap());
+                        for (int j = 0; j < nivelesOrden.size(); j++) {
+                            int val = filaMap.getOrDefault(nivelesOrden.get(j), 0);
+                            totColAN[j] += val;
+                            rr.createCell(j + 1).setCellValue(val);
+                        }
+                        rr.createCell(nivelesOrden.size() + 1).setCellValue(totFilaAN.getOrDefault(area, 0));
+                    }
+                    int finTabla1 = rowIdx - 1;
+
+                    Row rTot1 = sh.createRow(rowIdx++);
+                    rTot1.createCell(0).setCellValue("TOTAL GENERAL");
+                    for (int j = 0; j < nivelesOrden.size(); j++) {
+                        rTot1.createCell(j + 1).setCellValue(totColAN[j]);
+                    }
+                    rTot1.createCell(nivelesOrden.size() + 1).setCellValue(granTotalAN);
+                    styleRow(rTot1, headerStyle);
+
+                    if (finTabla1 >= inicioTabla1) {
+                        crearGraficoBarrasNativo(sh, "Total de titulados por Área de Interés (p9 × p4)",
+                                0, nivelesOrden.size() + 1,
+                                inicioTabla1, finTabla1,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 18);
+                        filaGrafico += 20;
                     }
                     rowIdx++;
-                    // p4
-                    Row rhp4 = sh.createRow(rowIdx++);
-                    rhp4.createCell(0).setCellValue("NIVEL DE POSGRADO DESEADO (p4)");
-                    rhp4.createCell(1).setCellValue("TOTAL");
-                    rhp4.createCell(2).setCellValue("%");
-                    styleRow(rhp4, headerStyle);
-                    List<ConteoRespuesta> np4 = EncuestaDAO.nivelesFormacionDeseados();
+
+                    // =====================================================================
+                    // 2. PREFERENCIA INSTITUCIONAL: NIVEL (p4) x ORGANIZACIÓN (p10)
+                    // =====================================================================
+                    Row rTit2 = sh.createRow(rowIdx++);
+                    rTit2.createCell(0).setCellValue("2. PREFERENCIA INSTITUCIONAL: NIVEL DE POSGRADO (p4) × ORGANIZACIÓN (p10)");
+                    styleRow(rTit2, headerStyle);
+
+                    Row rHead2 = sh.createRow(rowIdx++);
+                    rHead2.createCell(0).setCellValue("NIVEL DE POSGRADO");
+                    rHead2.createCell(1).setCellValue("ORGANIZACIÓN / INSTITUCIÓN");
+                    rHead2.createCell(2).setCellValue("FRECUENCIA (ni)");
+                    rHead2.createCell(3).setCellValue("%");
+                    styleRow(rHead2, headerStyle);
+
+                    var cruceNO = EncuestaDAO.cruceNivelOrganizacion(10);
+                    int totalNO = 0;
+                    for (Object obj : cruceNO) {
+                        Map row = (Map) obj;
+                        int freq = ((Number) row.get("total")).intValue();
+                        double pct = ((Number) row.get("porcentaje")).doubleValue();
+                        totalNO += freq;
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(String.valueOf(row.get("nivel")));
+                        rr.createCell(1).setCellValue(String.valueOf(row.get("organizacion")));
+                        rr.createCell(2).setCellValue(freq);
+                        rr.createCell(3).setCellValue(pct);
+                    }
+                    Row rTot2 = sh.createRow(rowIdx++);
+                    rTot2.createCell(0).setCellValue("TOTAL");
+                    rTot2.createCell(1).setCellValue("");
+                    rTot2.createCell(2).setCellValue(totalNO);
+                    rTot2.createCell(3).setCellValue(100.0);
+                    styleRow(rTot2, headerStyle);
+                    rowIdx++;
+
+                    // =====================================================================
+                    // 3. NIVEL DE FORMACIÓN DESEADO (p4) - FRECUENCIAS
+                    // =====================================================================
+                    Row rTit3 = sh.createRow(rowIdx++);
+                    rTit3.createCell(0).setCellValue("3. NIVEL DE FORMACIÓN DESEADO (p4) - FRECUENCIAS");
+                    styleRow(rTit3, headerStyle);
+
+                    Row rHead3 = sh.createRow(rowIdx++);
+                    rHead3.createCell(0).setCellValue("NIVEL DESEADO");
+                    rHead3.createCell(1).setCellValue("TOTAL");
+                    rHead3.createCell(2).setCellValue("%");
+                    styleRow(rHead3, headerStyle);
+
+                    var np4 = EncuestaDAO.nivelesFormacionDeseados();
                     int tn4 = 0;
                     for (ConteoRespuesta c : np4) tn4 += c.getTotal();
+
+                    int inicioTabla3 = rowIdx;
                     for (ConteoRespuesta c : np4) {
                         Row rr = sh.createRow(rowIdx++);
                         rr.createCell(0).setCellValue(c.getRespuesta());
                         rr.createCell(1).setCellValue(c.getTotal());
                         rr.createCell(2).setCellValue(tn4 == 0 ? 0.0 : (c.getTotal() * 100.0 / tn4));
                     }
+                    int finTabla3 = rowIdx - 1;
+
+                    if (finTabla3 >= inicioTabla3) {
+                        crearGraficoPastelNativo(sh, "Nivel de formación deseado (p4)",
+                                0, 1,
+                                inicioTabla3, finTabla3,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 18);
+                        filaGrafico += 20;
+                    }
                     rowIdx++;
-                    // matriz
-                    Map<String, Object> fin = EncuestaDAO.tablaFinanciamiento();
-                    @SuppressWarnings("unchecked") List<String> filasF = (List<String>) fin.get("filas");
-                    @SuppressWarnings("unchecked") List<String> colsF = (List<String>) fin.get("columnas");
-                    @SuppressWarnings("unchecked") List<CeldaCruce> celdasF = (List<CeldaCruce>) fin.get("celdas");
+
+                    // =====================================================================
+                    // 4. MECANISMOS DE FINANCIAMIENTO: MATRIZ DE CONTINGENCIA (p4 x p6)
+                    // =====================================================================
+                    Row rTit4 = sh.createRow(rowIdx++);
+                    rTit4.createCell(0).setCellValue("4. MECANISMOS DE FINANCIAMIENTO: MATRIZ DE CONTINGENCIA (p4 × p6)");
+                    styleRow(rTit4, headerStyle);
+
+                    var fin = EncuestaDAO.tablaFinanciamiento();
+                    var filasF = (List) fin.get("filas");
+                    var colsF = (List) fin.get("columnas");
+                    var celdasF = (List) fin.get("celdas");
+
                     Row rhm = sh.createRow(rowIdx++);
-                    rhm.createCell(0).setCellValue("NIVEL (p4) / FUENTE FINANCIAMIENTO (p6)");
+                    rhm.createCell(0).setCellValue("NIVEL / FINANCIAMIENTO");
                     int kc = 1;
-                    for (String c : colsF) rhm.createCell(kc++).setCellValue(c);
+                    for (Object c : colsF) rhm.createCell(kc++).setCellValue(String.valueOf(c));
                     rhm.createCell(kc).setCellValue("TOTAL_FILA");
                     styleRow(rhm, headerStyle);
-                    for (String f : filasF) {
+
+                    int inicioTabla4 = rowIdx;
+                    for (Object fObj : filasF) {
+                        String f = String.valueOf(fObj);
                         Row rr = sh.createRow(rowIdx++);
                         rr.createCell(0).setCellValue(f);
                         int kk = 1;
-                        for (String c : colsF) rr.createCell(kk++).setCellValue(getCelda(celdasF, f, c));
-                        rr.createCell(kk).setCellValue(getTotalFila(celdasF, f));
+                        for (Object cObj : colsF) {
+                            rr.createCell(kk++).setCellValue(getCelda((List<CeldaCruce>) celdasF, f, String.valueOf(cObj)));
+                        }
+                        rr.createCell(kk).setCellValue(getTotalFila((List<CeldaCruce>) celdasF, f));
                     }
+                    int finTabla4 = rowIdx - 1;
+
                     Row rtot = sh.createRow(rowIdx++);
                     rtot.createCell(0).setCellValue("TOTAL_COLUMNA");
                     int kkt = 1;
-                    long NTf = getTotalGeneral(celdasF);
-                    for (String c : colsF) rtot.createCell(kkt++).setCellValue(getTotalCol(celdasF, c));
+                    long NTf = getTotalGeneral((List<CeldaCruce>) celdasF);
+                    for (Object cObj : colsF) {
+                        rtot.createCell(kkt++).setCellValue(getTotalCol((List<CeldaCruce>) celdasF, String.valueOf(cObj)));
+                    }
                     rtot.createCell(kkt).setCellValue(NTf);
                     styleRow(rtot, headerStyle);
+
+                    if (finTabla4 >= inicioTabla4) {
+                        crearGraficoBarrasNativo(sh, "Matriz p4 × p6: Total por Nivel",
+                                0, colsF.size() + 1,
+                                inicioTabla4, finTabla4,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 18);
+                    }
                     rowIdx++;
-                    // chi2
+
+                    // =====================================================================
+                    // 5. DIAGNÓSTICO ESTADÍSTICO (Chi-cuadrado de Independencia)
+                    // =====================================================================
                     ResultadoChi2 rchi = (ResultadoChi2) fin.get("chi2");
                     Boolean tieneF = (Boolean) fin.get("tieneDatos");
                     Row rhc = sh.createRow(rowIdx++);
-                    rhc.createCell(0).setCellValue("DIAGNÓSTICO χ²");
+                    rhc.createCell(0).setCellValue("DIAGNÓSTICO ESTADÍSTICO (Chi-cuadrado)");
                     styleRow(rhc, headerStyle);
                     if (rchi != null) {
-                        addKV(sh, rowIdx++, "χ²", rchi.getChiCuadrado());
+                        addKV(sh, rowIdx++, "Chi-cuadrado", rchi.getChiCuadrado());
                         addKV(sh, rowIdx++, "gl", rchi.getGradosLibertad());
                         addKV(sh, rowIdx++, "p-valor", rchi.getValorP());
-                        addKV(sh, rowIdx++, "Independiente (p≥0.05)", rchi.isIndependiente() ? "SÍ" : "NO");
+                        addKV(sh, rowIdx++, "Independiente (p >= 0.05)", rchi.isIndependiente() ? "SÍ" : "NO");
                         addKV(sh, rowIdx++, "Interpretación", rchi.getInterpretacion());
                         addKV(sh, rowIdx++, "Datos suficientes", (tieneF != null && tieneF) ? "SÍ" : "NO");
                     }
                 }
                 case "empleabilidad" -> {
+                    final int COL_GRAFICO = 6;
+                    final int ANCHO_GRAFICO = 6;
+                    int filaGrafico = 2;
                     rowIdx++;
-                    // AE
+
+                    // =====================================================================
+                    // 1. ESTADÍSTICOS DE ANTIGÜEDAD PROFESIONAL (p12)
+                    // =====================================================================
+                    Row rTit1 = sh.createRow(rowIdx++);
+                    rTit1.createCell(0).setCellValue("1. ESTADÍSTICOS DE ANTIGÜEDAD PROFESIONAL (p12)");
+                    styleRow(rTit1, headerStyle);
+
+                    Row rHead1 = sh.createRow(rowIdx++);
+                    rHead1.createCell(0).setCellValue("INDICADOR");
+                    rHead1.createCell(1).setCellValue("VALOR");
+                    styleRow(rHead1, headerStyle);
+
+                    var respP12 = EncuestaDAO.contarRespuestas(12);
+                    var valsAnt = new ArrayList<Double>();
+                    var freqAnt = new LinkedHashMap<Double, Integer>();
+                    for (ConteoRespuesta c : respP12) {
+                        if (c.getRespuesta() == null) continue;
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+(?:[.,]\\d+)?)").matcher(c.getRespuesta());
+                        if (m.find()) {
+                            double v = Double.parseDouble(m.group(1).replace(',', '.'));
+                            int tot = c.getTotal();
+                            freqAnt.put(v, freqAnt.getOrDefault(v, 0) + tot);
+                            for (int i = 0; i < tot; i++) valsAnt.add(v);
+                        }
+                    }
+                    Collections.sort(valsAnt);
+                    int nValid = valsAnt.size();
+                    double sumaAnt = 0;
+                    for (double v : valsAnt) sumaAnt += v;
+                    double mediaAnt = nValid == 0 ? 0.0 : sumaAnt / nValid;
+                    double medianaAnt = 0.0;
+                    if (nValid > 0) {
+                        medianaAnt = (nValid % 2 == 1)
+                                ? valsAnt.get(nValid / 2)
+                                : (valsAnt.get(nValid / 2 - 1) + valsAnt.get(nValid / 2)) / 2.0;
+                    }
+                    double modaAnt = 0.0;
+                    int maxFreqAnt = -1;
+                    for (var entry : freqAnt.entrySet()) {
+                        if (entry.getValue() > maxFreqAnt) {
+                            maxFreqAnt = entry.getValue();
+                            modaAnt = entry.getKey();
+                        }
+                    }
+                    double sumSq = 0;
+                    for (double v : valsAnt) sumSq += Math.pow(v - mediaAnt, 2);
+                    double desvAnt = nValid > 1 ? Math.sqrt(sumSq / (nValid - 1)) : 0.0;
+
+                    addKV(sh, rowIdx++, "Titulados válidos", nValid);
+                    addKV(sh, rowIdx++, "Media (años)", Double.parseDouble(DF2.format(mediaAnt)));
+                    addKV(sh, rowIdx++, "Mediana (años)", Double.parseDouble(DF2.format(medianaAnt)));
+                    addKV(sh, rowIdx++, "Moda (años)", Double.parseDouble(DF2.format(modaAnt)));
+                    addKV(sh, rowIdx++, "Desv. Estándar (años)", Double.parseDouble(DF2.format(desvAnt)));
+                    rowIdx++;
+
+                    // =====================================================================
+                    // 2. DEMANDA DE EMPRESAS VS. INTERÉS DE GRADUADOS
+                    // =====================================================================
+                    Row rTit2 = sh.createRow(rowIdx++);
+                    rTit2.createCell(0).setCellValue("2. DEMANDA DE EMPRESAS VS. INTERÉS DE GRADUADOS");
+                    styleRow(rTit2, headerStyle);
+
                     Row rhAe = sh.createRow(rowIdx++);
                     rhAe.createCell(0).setCellValue("ÁREA");
                     rhAe.createCell(1).setCellValue("DEMANDA_EMPLEADOR(%)");
                     rhAe.createCell(2).setCellValue("INTERÉS_TITULADOS(%)");
                     rhAe.createCell(3).setCellValue("EMPLEABILIDAD(%)");
                     styleRow(rhAe, headerStyle);
-                    List<AreaEmpleabilidad> aeL = EncuestaDAO.analisisEmpleabilidad();
+
+                    var aeL = EncuestaDAO.analisisEmpleabilidad();
+                    int inicioAe = rowIdx;
                     for (AreaEmpleabilidad a : aeL) {
                         Row rr = sh.createRow(rowIdx++);
                         rr.createCell(0).setCellValue(a.getArea());
@@ -1397,15 +1731,153 @@ public class ExportController {
                         rr.createCell(2).setCellValue(a.getInteresTitulados());
                         rr.createCell(3).setCellValue(a.getEmpleabilidad());
                     }
+                    int finAe = rowIdx - 1;
+                    if (finAe >= inicioAe) {
+                        crearGraficoBarrasNativo(sh, "Índice de Empleabilidad por Área (%)",
+                                0, 3,
+                                inicioAe, finAe,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 16);
+                        filaGrafico += 18;
+                    }
                     rowIdx++;
-                    // críticas
-                    addSimpleSection(sh, rowIdx, "RAZONES CRÍTICAS (p28)", razonesCriticas(), headerStyle);
-                    rowIdx += getSimpleCount(razonesCriticas()) + 2;
-                    addSimpleSection(sh, rowIdx, "ASIGNATURAS POCA UTILIDAD (p44) - TOP", asignaturasPocaTop(20), headerStyle);
-                    rowIdx += getSimpleCount(asignaturasPocaTop(20)) + 2;
-                    addSimpleSection(sh, rowIdx, "RUBROS DE INVERSIÓN (p53)", EncuestaDAO.contarRespuestas(53), headerStyle);
-                    rowIdx += getSimpleCount(EncuestaDAO.contarRespuestas(53)) + 2;
-                    addSimpleSection(sh, rowIdx, "POSIBILIDAD DE CONTRATACIÓN (p55)", EncuestaDAO.contarRespuestas(55), headerStyle);
+
+                    // =====================================================================
+                    // 3. MOTIVOS PRINCIPALES DE DESEMPLEO (p28 - TODAS LAS RAZONES)
+                    // =====================================================================
+                    Row rTit3 = sh.createRow(rowIdx++);
+                    rTit3.createCell(0).setCellValue("3. MOTIVOS PRINCIPALES DE DESEMPLEO (p28)");
+                    styleRow(rTit3, headerStyle);
+
+                    Row rHead3 = sh.createRow(rowIdx++);
+                    rHead3.createCell(0).setCellValue("RAZÓN");
+                    rHead3.createCell(1).setCellValue("TOTAL");
+                    rHead3.createCell(2).setCellValue("%");
+                    styleRow(rHead3, headerStyle);
+
+                    var motivos28 = EncuestaDAO.contarRespuestas(28);
+                    int nMot = 0;
+                    for (ConteoRespuesta c : motivos28) nMot += c.getTotal();
+                    int inicioMot = rowIdx;
+                    for (ConteoRespuesta c : motivos28) {
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(c.getRespuesta());
+                        rr.createCell(1).setCellValue(c.getTotal());
+                        rr.createCell(2).setCellValue(nMot == 0 ? 0.0 : (c.getTotal() * 100.0 / nMot));
+                    }
+                    int finMot = rowIdx - 1;
+                    if (finMot >= inicioMot) {
+                        crearGraficoBarrasNativo(sh, "Motivos Principales de Desempleo (p28)",
+                                0, 1,
+                                inicioMot, finMot,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 16);
+                        filaGrafico += 18;
+                    }
+                    rowIdx++;
+
+                    // =====================================================================
+                    // 4. MATERIAS CON MENOR IMPACTO LABORAL (p44 - % SOBRE TITULADOS)
+                    // =====================================================================
+                    Row rTit4 = sh.createRow(rowIdx++);
+                    rTit4.createCell(0).setCellValue("4. MATERIAS CON MENOR IMPACTO LABORAL (p44)");
+                    styleRow(rTit4, headerStyle);
+
+                    Row rHead4 = sh.createRow(rowIdx++);
+                    rHead4.createCell(0).setCellValue("ASIGNATURA");
+                    rHead4.createCell(1).setCellValue("TOTAL");
+                    rHead4.createCell(2).setCellValue("% TITULADOS");
+                    styleRow(rHead4, headerStyle);
+
+                    var asig44 = EncuestaDAO.asignaturasFrecuencia(44);
+                    int inicioAsig = rowIdx;
+                    for (ConteoRespuesta c : asig44) {
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(c.getRespuesta());
+                        rr.createCell(1).setCellValue(c.getTotal());
+                        rr.createCell(2).setCellValue(c.getPorcentaje());
+                    }
+                    int finAsig = rowIdx - 1;
+                    if (finAsig >= inicioAsig) {
+                        crearGraficoBarrasNativo(sh, "Materias con Menor Impacto Laboral (p44)",
+                                0, 1,
+                                inicioAsig, finAsig,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 18);
+                        filaGrafico += 20;
+                    }
+                    rowIdx++;
+
+                    // =====================================================================
+                    // 5. PERFIL DEL SECTOR EMPRESARIAL: RUBRO PRINCIPAL (p53)
+                    // =====================================================================
+                    Row rTit5 = sh.createRow(rowIdx++);
+                    rTit5.createCell(0).setCellValue("5. PERFIL DEL SECTOR EMPRESARIAL: RUBRO PRINCIPAL (p53)");
+                    styleRow(rTit5, headerStyle);
+
+                    Row rHead5 = sh.createRow(rowIdx++);
+                    rHead5.createCell(0).setCellValue("RUBRO");
+                    rHead5.createCell(1).setCellValue("TOTAL");
+                    rHead5.createCell(2).setCellValue("%");
+                    styleRow(rHead5, headerStyle);
+
+                    var p53 = EncuestaDAO.contarRespuestas(53);
+                    int N53 = 0;
+                    for (ConteoRespuesta c : p53) N53 += c.getTotal();
+                    for (ConteoRespuesta c : p53) {
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(c.getRespuesta());
+                        rr.createCell(1).setCellValue(c.getTotal());
+                        rr.createCell(2).setCellValue(N53 == 0 ? 0.0 : (c.getTotal() * 100.0 / N53));
+                    }
+                    rowIdx++;
+
+                    // =====================================================================
+                    // 6. PERFIL DEL SECTOR EMPRESARIAL: POSIBILIDAD DE INCORPORAR (p55)
+                    // =====================================================================
+                    Row rTit6 = sh.createRow(rowIdx++);
+                    rTit6.createCell(0).setCellValue("6. PERFIL DEL SECTOR EMPRESARIAL: POSIBILIDAD DE INCORPORAR (p55)");
+                    styleRow(rTit6, headerStyle);
+
+                    Row rHead6 = sh.createRow(rowIdx++);
+                    rHead6.createCell(0).setCellValue("OPCIÓN");
+                    rHead6.createCell(1).setCellValue("TOTAL");
+                    rHead6.createCell(2).setCellValue("%");
+                    styleRow(rHead6, headerStyle);
+
+                    var p55 = EncuestaDAO.contarRespuestas(55);
+                    int N55 = 0;
+                    for (ConteoRespuesta c : p55) N55 += c.getTotal();
+                    int inicioP55 = rowIdx;
+                    for (ConteoRespuesta c : p55) {
+                        Row rr = sh.createRow(rowIdx++);
+                        rr.createCell(0).setCellValue(c.getRespuesta());
+                        rr.createCell(1).setCellValue(c.getTotal());
+                        rr.createCell(2).setCellValue(N55 == 0 ? 0.0 : (c.getTotal() * 100.0 / N55));
+                    }
+                    int finP55 = rowIdx - 1;
+                    if (finP55 >= inicioP55) {
+                        crearGraficoPastelNativo(sh, "Posibilidad de Incorporar Titulados (p55)",
+                                0, 1,
+                                inicioP55, finP55,
+                                COL_GRAFICO, filaGrafico, ANCHO_GRAFICO, 16);
+                    }
+                    rowIdx++;
+
+                    // =====================================================================
+                    // 7. RESUMEN Y RECOMENDACIÓN
+                    // =====================================================================
+                    Row rTit7 = sh.createRow(rowIdx++);
+                    rTit7.createCell(0).setCellValue("7. RESUMEN Y RECOMENDACIÓN");
+                    styleRow(rTit7, headerStyle);
+
+                    StringBuilder topAreas = new StringBuilder();
+                    for (int i = 0; i < aeL.size(); i++) {
+                        AreaEmpleabilidad a = aeL.get(i);
+                        if (i > 0) topAreas.append(", ");
+                        topAreas.append(a.getArea()).append(" ").append(DF2.format(a.getEmpleabilidad())).append("%");
+                    }
+                    Row rRes1 = sh.createRow(rowIdx++);
+                    rRes1.createCell(0).setCellValue("Áreas con mayor empleabilidad: " + topAreas);
+                    Row rRes2 = sh.createRow(rowIdx++);
+                    rRes2.createCell(0).setCellValue("Oferta con poca demanda: priorizar revisión de las razones críticas, las asignaturas de poca utilidad y la posibilidad real de contratación, cruzando con las áreas de mayor empleabilidad.");
                 }
                 case "ubicacion" -> {
                     rowIdx++;
@@ -1494,12 +1966,18 @@ public class ExportController {
                 }
             }
         } catch (Exception e) {
-            Row rr = sh.createRow(rowIdx++);
-            rr.createCell(0).setCellValue("ERROR: " + e.getMessage());
+            // Antes se escribía "ERROR: ..." dentro de la hoja y se devolvía 200 con un
+            // archivo incompleto. Ahora se propaga para informar el fallo real.
+            try { wb.close(); } catch (Exception ignored) {}
+            throw new IOException("No se pudo construir el reporte '" + tipo + "': " + mensajeError(e), e);
         }
 
-        // Gráficos embebidos (según el reporte) 
-        try { agregarGraficosExcel(wb, sh, tipo); } catch (Exception ignored) {}
+        // Gráficos embebidos (según el reporte)
+        try {
+            agregarGraficosExcel(wb, sh, tipo);
+        } catch (Exception ex) {
+            System.err.println("Aviso: no se pudieron agregar los gráficos del reporte '" + tipo + "': " + ex);
+        }
 
         // AutoSize
         for (int i = 0; i < 20; i++) {
@@ -1565,49 +2043,10 @@ public class ExportController {
                     // Las frecuencias ya se escriben con su tabla y total n en la hoja.
                 }
                 case "formacion" -> {
-                    // 1. Gráfico Nativo de Barras para Áreas de Interés (p9)
-                    crearGraficoBarrasNativo(sh, "Áreas de interés de posgrado (p9)", 
-                                            0, 1, 
-                                            3, 7, 
-                                            COL, 3, ANCHO_COLS, 18);
-
-                    // 2. Gráfico Nativo de Pastel para Nivel Deseado (p4)
-                    crearGraficoPastelNativo(sh, "Nivel de posgrado deseado (p4)", 
-                                            0, 1, 
-                                            10, 13, 
-                                            COL, 23, ANCHO_COLS, 18);
-
-                    // 3. Gráfico Nativo de Barras para la Matriz (p4 x p6)
-                    crearGraficoBarrasNativo(sh, "Matriz p4 x p6: Total por Nivel", 
-                                            0, 4, 
-                                            16, 19, 
-                                            COL, 43, ANCHO_COLS, 18);
+                    // Los gráficos ya se generan dinámicamente en generarExcel
                 }
                 case "empleabilidad" -> {
-                    // 1. Gráfico Nativo de Barras - Áreas con Mayor Empleabilidad (p21) -> Filas 3 a 19 (Índices 3 a 19)
-                    // Lee la columna D (índice 3, 'EMPLEABILIDAD(%)') y usa las categorías de la columna A (índice 0)
-                    crearGraficoBarrasNativo(sh, "Índice de Empleabilidad por Área (%)", 
-                                            0, 3, 
-                                            3, 19, 
-                                            COL, 3, ANCHO_COLS, 20);
-
-                    // 2. Gráfico Nativo de Barras - Razones Críticas de Poca Demanda (p28) -> Filas 23 a 24 (Índices 23 a 24)
-                    crearGraficoBarrasNativo(sh, "Oferta con poca demanda: Razones críticas (p28)", 
-                                            0, 1, 
-                                            23, 24, 
-                                            COL, 25, ANCHO_COLS, 15);
-
-                    // 3. Gráfico Nativo de Barras - Asignaturas con Poca Utilidad (p44) -> Filas 27 a 37 (Índices 27 a 37)
-                    crearGraficoBarrasNativo(sh, "Asignaturas con poca utilidad laboral (p44) - TOP", 
-                                            0, 1, 
-                                            27, 37, 
-                                            COL, 42, ANCHO_COLS, 18);
-
-                    // 4. Gráfico Nativo de Pastel - Posibilidad de Contratación (p55) -> Filas 57 a 59 (Índices 57 a 59)
-                    crearGraficoPastelNativo(sh, "Posibilidad de Contratación de Titulados (p55)", 
-                                            0, 1, 
-                                            57, 59, 
-                                            COL, 62, ANCHO_COLS, 16);
+                    // Los gráficos nativos de empleabilidad se generan dinámicamente en generarExcel
                 }
                 case "ubicacion" -> {
                     // 1. Gráfico Nativo de Barras - ¿Dónde trabajan los titulados? (p19) -> Filas 9 a 13 (Índices 9 a 13)
@@ -2109,10 +2548,18 @@ public class ExportController {
 
     public static void exportPdf(Context ctx) {
         String tipo = ctx.queryParam("tipo");
-        if (tipo == null) tipo = "brechas";
-        String html = generarHtml(tipo);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        if (tipo == null || tipo.isBlank()) tipo = "brechas";
         try {
+            String html = generarHtml(tipo)
+                    .replace("χ²", "Chi2")
+                    .replace("χ", "Chi")
+                    .replace("H₀", "H0")
+                    .replace("₀", "0")
+                    .replace("≥", ">=")
+                    .replace("≤", "<=")
+                    .replace("nᵢ", "ni")
+                    .replace("ᵢ", "i");
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
             builder.withHtmlContent(html, null);
@@ -2123,7 +2570,8 @@ public class ExportController {
             ctx.res().setContentType("application/pdf");
             ctx.result(new java.io.ByteArrayInputStream(baos.toByteArray()));
         } catch (Exception e) {
-            ctx.status(500).result("Error al generar PDF: " + e.getMessage());
+            e.printStackTrace();
+            ctx.status(500).result("Error al generar PDF: " + mensajeError(e));
         }
     }
 
@@ -2255,135 +2703,334 @@ public class ExportController {
                 case "desempleo" -> appendAnalisisDesempleoHtml(sb, analisisDesempleo());
                 case "formacion" -> {
                     sb.append("<h2>4. Formación continua y Mecanismos de financiamiento</h2>");
-                    
-                    // 1. Áreas de Interés (p9)
-                    List<AreaInteresPosgrado> ap9h = EncuestaDAO.areasInteresPosgrado();
-                    int Np9h=0; for (AreaInteresPosgrado a:ap9h) Np9h+=a.getN();
-                    sb.append("<h3>Áreas de interés de posgrado (p9)</h3><table><tr><th>ÁREA</th><th class='num'>n</th><th class='num'>f_i (%)</th></tr>");
-                    for (AreaInteresPosgrado a:ap9h) sb.append("<tr><td>").append(esc(a.getArea())).append("</td><td class='num'>").append(a.getN()).append("</td><td class='num'>").append(DF2.format(a.getPorcentaje())).append("</td></tr>");
-                    sb.append("</table>");
-                    
-                    // Alerta de Concentración (Usando &#8805; para >= y &#8594; para ->)
-                    if (Np9h>0){ 
-                        long t1=ap9h.isEmpty()?0:ap9h.get(0).getN(); 
-                        long t2=ap9h.size()<2?t1:t1+ap9h.get(1).getN(); 
-                        double pt2=t2*100.0/Np9h; 
-                        // En lugar de entidades o >= directo, usa texto limpio o escapes simples:
-                        sb.append("<div class='alert'><strong>Alerta de Concentración Crítica:</strong> Suma Top 2 = ")
-                        .append(t2).append("/").append(Np9h).append(" (").append(DF2.format(pt2))
-                        .append("%) — Umbral mayor o igual a 70% -&gt; ")
-                        .append(pt2>=70?"<strong>SÍ (CRÍTICA)</strong>":"NO").append("</div>");
+
+                    // =========================================================================
+                    // 1. TABLA CRUZADA: ÁREA DE INTERÉS (p9) x NIVEL DE POSGRADO DESEADO (p4)
+                    // =========================================================================
+                    sb.append("<h3>Tabla cruzada · Área de interés (p9) × Nivel de posgrado deseado (p4)</h3>");
+                    var cruceAN = EncuestaDAO.cruceAreaNivel();
+                    var nivelesOrden = List.of("DIPLOMADO", "MAESTRIA", "ESPECIALIDAD", "DOCTORADO");
+                    var matrizAN = new LinkedHashMap<String, Map<String, Integer>>();
+                    var totFilaAN = new LinkedHashMap<String, Integer>();
+                    int granTotalAN = 0;
+
+                    for (Object obj : cruceAN) {
+                        Map row = (Map) obj;
+                        String area = String.valueOf(row.get("area"));
+                        String nivel = String.valueOf(row.get("nivel")).toUpperCase();
+                        int tot = ((Number) row.get("total")).intValue();
+                        matrizAN.computeIfAbsent(area, k -> new LinkedHashMap<>()).put(nivel, tot);
+                        totFilaAN.put(area, totFilaAN.getOrDefault(area, 0) + tot);
+                        granTotalAN += tot;
                     }
-                    
-                    // 2. Nivel Deseado (p4)
-                    List<ConteoRespuesta> np4h = EncuestaDAO.nivelesFormacionDeseados();
-                    int tn4h=0; for (ConteoRespuesta c:np4h) tn4h+=c.getTotal();
-                    sb.append("<h3>Nivel de posgrado deseado (p4)</h3><table><tr><th>NIVEL</th><th class='num'>TOTAL</th><th class='num'>%</th></tr>");
-                    for (ConteoRespuesta c:np4h){ double p=tn4h==0?0:c.getTotal()*100.0/tn4h; sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>").append(c.getTotal()).append("</td><td class='num'>").append(DF2.format(p)).append("</td></tr>"); }
-                    sb.append("</table>");
-                    
-                    // 3. Matriz de Contingencia
-                    Map<String,Object> finh = EncuestaDAO.tablaFinanciamiento();
-                    @SuppressWarnings("unchecked") List<String> fh=(List<String>)finh.get("filas");
-                    @SuppressWarnings("unchecked") List<String> ch=(List<String>)finh.get("columnas");
-                    @SuppressWarnings("unchecked") List<CeldaCruce> ceh=(List<CeldaCruce>)finh.get("celdas");
-                    sb.append("<h3>Matriz de Contingencia: p4 x p6 (Nivel x Fuente de financiamiento)</h3><table><tr><th>NIVEL / FUENTE</th>");
-                    for (String c:ch) sb.append("<th class='num'>").append(esc(c)).append("</th>");
-                    sb.append("<th class='num'>TOTAL_FILA</th></tr>");
-                    for (String f:fh){ sb.append("<tr><th>").append(esc(f)).append("</th>"); for (String c:ch) sb.append("<td class='num'>").append(getCelda(ceh,f,c)).append("</td>"); sb.append("<td class='num'>").append(getTotalFila(ceh,f)).append("</td></tr>"); }
-                    sb.append("<tr><th>TOTAL_COLUMNA</th>"); for (String c:ch) sb.append("<td class='num'>").append(getTotalCol(ceh,c)).append("</td>"); sb.append("<td class='num'><strong>").append(getTotalGeneral(ceh)).append("</strong></td></tr></table>");
-                    
-                    // 4. Chi-cuadrado
-                    ResultadoChi2 rch = (ResultadoChi2)finh.get("chi2");
-                    Boolean tfh=(Boolean)finh.get("tieneDatos");
-                    if (rch!=null){ 
-                        sb.append("<h3>Diagnóstico Estadístico (Chi-cuadrado de Independencia)</h3><table><tr><th>ÍNDICE</th><th>VALOR</th></tr>"); 
-                        sb.append("<tr><td>Chi-cuadrado (Chi2)</td><td>").append(rch.getChiCuadrado()).append("</td></tr>"); 
-                        sb.append("<tr><td>gl</td><td>").append(rch.getGradosLibertad()).append("</td></tr>"); 
-                        sb.append("<tr><td>p-valor</td><td>").append(rch.getValorP()).append("</td></tr>"); 
-                        sb.append("<tr><td>Independiente (p &gt;= 0.05)</td><td>").append(rch.isIndependiente()?"SÍ":"NO").append("</td></tr>");
-                        sb.append("<tr><td>Datos suficientes</td><td>").append((tfh!=null&&tfh)?"SÍ":"NO").append("</td></tr>"); 
-                        
-                        String interpLimpia = rch.getInterpretacion() == null ? "" : rch.getInterpretacion().replace("χ²", "Chi2");
-                        sb.append("<tr><td>Interpretación</td><td>").append(esc(interpLimpia)).append("</td></tr></table>"); 
+
+                    var areasOrdenadas = new ArrayList<String>(totFilaAN.keySet());
+                    areasOrdenadas.sort((a, b) -> Integer.compare(totFilaAN.get(b), totFilaAN.get(a)));
+
+                    sb.append("<table><tr><th>Área de interés</th>");
+                    for (String niv : nivelesOrden) {
+                        sb.append("<th class='num'>").append(esc(niv)).append("</th>");
                     }
-                    
-                    // 5. Gráficos
-                    sb.append(htmlChart("Áreas de interés de posgrado (p9)", chartBar("", "Área", "n",
-                            ap9h.stream().map(AreaInteresPosgrado::getArea).collect(java.util.stream.Collectors.toList()),
-                            ap9h.stream().map(a -> (double) a.getN()).collect(java.util.stream.Collectors.toList()), "n")));
-                            
-                    sb.append(htmlChart("Nivel de posgrado deseado (p4)", chartPie("",
-                            np4h.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            np4h.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()))));
-                            
-                    if (fh != null && !fh.isEmpty()) {
-                        List<Double> totF = new ArrayList<>();
-                        for (String f : fh) totF.add((double) getTotalFila(ceh, f));
-                        sb.append(htmlChart("Matriz p4 x p6: total por nivel de posgrado", chartBar("", "Nivel", "Titulados", fh, totF, "Total")));
+                    sb.append("<th class='num'>Total</th></tr>");
+
+                    int[] totColAN = new int[nivelesOrden.size()];
+                    DefaultCategoryDataset dsAreaNivel = new DefaultCategoryDataset();
+                    for (String area : areasOrdenadas) {
+                        sb.append("<tr><td>").append(esc(area)).append("</td>");
+                        Map<String, Integer> filaMap = matrizAN.getOrDefault(area, Collections.emptyMap());
+                        for (int j = 0; j < nivelesOrden.size(); j++) {
+                            String niv = nivelesOrden.get(j);
+                            int val = filaMap.getOrDefault(niv, 0);
+                            totColAN[j] += val;
+                            sb.append("<td class='num'>").append(val).append("</td>");
+                            dsAreaNivel.addValue(val, niv, area);
+                        }
+                        sb.append("<td class='num'><b>").append(totFilaAN.getOrDefault(area, 0)).append("</b></td></tr>");
+                    }
+                    sb.append("<tr class='total'><td>Total general</td>");
+                    for (int j = 0; j < nivelesOrden.size(); j++) {
+                        sb.append("<td class='num'>").append(totColAN[j]).append("</td>");
+                    }
+                    sb.append("<td class='num'>").append(granTotalAN).append("</td></tr></table>");
+
+                    // Gráfico agrupado Área x Nivel
+                    JFreeChart chAN = ChartFactory.createBarChart(
+                            "Áreas de interés × Nivel de posgrado deseado (N = " + granTotalAN + ")",
+                            "Área de interés", "Titulados", dsAreaNivel,
+                            PlotOrientation.VERTICAL, true, false, false);
+                    CategoryPlot plotAN = chAN.getCategoryPlot();
+                    plotAN.setBackgroundPaint(java.awt.Color.WHITE);
+                    plotAN.setRangeGridlinePaint(java.awt.Color.LIGHT_GRAY);
+                    BarRenderer rAN = (BarRenderer) plotAN.getRenderer();
+                    rAN.setDrawBarOutline(false);
+                    rAN.setSeriesPaint(0, new java.awt.Color(0x0D, 0x6E, 0xFD));
+                    rAN.setSeriesPaint(1, new java.awt.Color(0x00, 0xC2, 0xE0));
+                    rAN.setSeriesPaint(2, new java.awt.Color(0x19, 0x87, 0x54));
+                    rAN.setSeriesPaint(3, new java.awt.Color(0xFF, 0xC1, 0x07));
+                    sb.append(htmlChart("Áreas de interés × Nivel de posgrado deseado", renderPng(chAN, 760, 340)));
+
+                    // =========================================================================
+                    // 2. PREFERENCIA INSTITUCIONAL: NIVEL (p4) x ORGANIZACIÓN (p10)
+                    // =========================================================================
+                    sb.append("<h3>Preferencia institucional · Nivel de Posgrado (p4) × Organización (p10)</h3>");
+                    var cruceNO = EncuestaDAO.cruceNivelOrganizacion(10);
+                    sb.append("<table><tr><th>Nivel de Posgrado</th><th>Organización / Institución</th><th class='num'>Frecuencia (nᵢ)</th><th class='num'>%</th></tr>");
+
+                    int totalNO = 0;
+                    var orgOrden = new LinkedHashSet<String>();
+                    var mapaOrgNivel = new LinkedHashMap<String, Map<String, Integer>>();
+
+                    for (Object obj : cruceNO) {
+                        Map row = (Map) obj;
+                        String niv = String.valueOf(row.get("nivel")).toUpperCase();
+                        String org = String.valueOf(row.get("organizacion"));
+                        int freq = ((Number) row.get("total")).intValue();
+                        double pct = ((Number) row.get("porcentaje")).doubleValue();
+                        totalNO += freq;
+
+                        orgOrden.add(org);
+                        mapaOrgNivel.computeIfAbsent(org, k -> new LinkedHashMap<>()).put(niv, freq);
+
+                        sb.append("<tr><td><b>").append(esc(niv)).append("</b></td><td>")
+                        .append(esc(org)).append("</td><td class='num'>")
+                        .append(freq).append("</td><td class='num'>")
+                        .append(DF2.format(pct)).append("%</td></tr>");
+                    }
+                    sb.append("<tr class='total'><td colspan='2'>Total</td><td class='num'>")
+                    .append(totalNO).append("</td><td class='num'>100.00%</td></tr></table>");
+
+                    // Gráfico agrupado Organización x Nivel
+                    DefaultCategoryDataset dsOrgNivel = new DefaultCategoryDataset();
+                    for (String org : orgOrden) {
+                        Map<String, Integer> mapN = mapaOrgNivel.getOrDefault(org, Collections.emptyMap());
+                        String orgCorta = org.length() > 22 ? org.substring(0, 22) + "..." : org;
+                        for (String niv : nivelesOrden) {
+                            dsOrgNivel.addValue(mapN.getOrDefault(niv, 0), niv, orgCorta);
+                        }
+                    }
+                    JFreeChart chON = ChartFactory.createBarChart(
+                            "Preferencia institucional · Nivel × Organización",
+                            "Organización / Institución", "Titulados", dsOrgNivel,
+                            PlotOrientation.VERTICAL, true, false, false);
+                    CategoryPlot plotON = chON.getCategoryPlot();
+                    plotON.setBackgroundPaint(java.awt.Color.WHITE);
+                    plotON.setRangeGridlinePaint(java.awt.Color.LIGHT_GRAY);
+                    BarRenderer rON = (BarRenderer) plotON.getRenderer();
+                    rON.setDrawBarOutline(false);
+                    rON.setSeriesPaint(0, new java.awt.Color(0x0D, 0x6E, 0xFD));
+                    rON.setSeriesPaint(1, new java.awt.Color(0x00, 0xC2, 0xE0));
+                    rON.setSeriesPaint(2, new java.awt.Color(0x19, 0x87, 0x54));
+                    rON.setSeriesPaint(3, new java.awt.Color(0xFF, 0xC1, 0x07));
+                    sb.append(htmlChart("Preferencia institucional · Nivel × Organización", renderPng(chON, 760, 350)));
+
+                    // =========================================================================
+                    // 3. NIVEL DE FORMACIÓN DESEADO (p4) - FRECUENCIAS
+                    // =========================================================================
+                    sb.append("<h3>Nivel de formación deseado (p4) - Frecuencias</h3>");
+                    var np4 = EncuestaDAO.nivelesFormacionDeseados();
+                    int tn4 = 0;
+                    for (ConteoRespuesta c : np4) tn4 += c.getTotal();
+
+                    sb.append("<table><tr><th>Nivel</th><th class='num'>Total</th><th class='num'>%</th></tr>");
+                    DefaultPieDataset<String> dp4 = new DefaultPieDataset<>();
+                    for (ConteoRespuesta c : np4) {
+                        double pct = tn4 == 0 ? 0.0 : (c.getTotal() * 100.0 / tn4);
+                        sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>")
+                        .append(c.getTotal()).append("</td><td class='num'>")
+                        .append(DF2.format(pct)).append("%</td></tr>");
+                        dp4.setValue(c.getRespuesta(), c.getTotal());
+                    }
+                    sb.append("</table>");
+
+                    JFreeChart chP4 = ChartFactory.createPieChart("Nivel de formación deseado (p4)", dp4, true, false, false);
+                    PiePlot plotP4 = (PiePlot) chP4.getPlot();
+                    plotP4.setBackgroundPaint(java.awt.Color.WHITE);
+                    plotP4.setLabelGenerator(new StandardPieSectionLabelGenerator("{0}: {1} ({2})"));
+                    sb.append(htmlChart("Nivel de formación deseado (p4)", renderPng(chP4, 720, 360)));
+
+                    // =========================================================================
+                    // 4. MECANISMOS DE FINANCIAMIENTO: MATRIZ DE CONTINGENCIA (p4 x p6)
+                    // =========================================================================
+                    var fin = EncuestaDAO.tablaFinanciamiento();
+                    var filasF = (List) fin.get("filas");
+                    var colsF = (List) fin.get("columnas");
+                    var celdasF = (List) fin.get("celdas");
+
+                    sb.append("<h3>Mecanismos de financiamiento · Matriz de contingencia (Nivel × Fuente)</h3>");
+                    sb.append("<table><tr><th>Nivel / Financiamiento</th>");
+                    for (Object c : colsF) sb.append("<th class='num'>").append(esc(String.valueOf(c))).append("</th>");
+                    sb.append("<th class='num'>Total fila</th></tr>");
+
+                    for (Object fObj : filasF) {
+                        String f = String.valueOf(fObj);
+                        sb.append("<tr><td><b>").append(esc(f)).append("</b></td>");
+                        for (Object cObj : colsF) {
+                            sb.append("<td class='num'>").append(getCelda((List<CeldaCruce>) celdasF, f, String.valueOf(cObj))).append("</td>");
+                        }
+                        sb.append("<td class='num'><b>").append(getTotalFila((List<CeldaCruce>) celdasF, f)).append("</b></td></tr>");
+                    }
+                    long NTf = getTotalGeneral((List<CeldaCruce>) celdasF);
+                    sb.append("<tr class='total'><td>Total columna</td>");
+                    for (Object cObj : colsF) {
+                        sb.append("<td class='num'>").append(getTotalCol((List<CeldaCruce>) celdasF, String.valueOf(cObj))).append("</td>");
+                    }
+                    sb.append("<td class='num'>").append(NTf).append("</td></tr></table>");
+
+                    // =========================================================================
+                    // 5. DIAGNÓSTICO ESTADÍSTICO (Chi-cuadrado de Independencia)
+                    // =========================================================================
+                    ResultadoChi2 rchi = (ResultadoChi2) fin.get("chi2");
+                    Boolean tieneF = (Boolean) fin.get("tieneDatos");
+                    sb.append("<h3>Diagnóstico estadístico · Chi-cuadrado (χ²)</h3>");
+                    if (rchi != null) {
+                        sb.append("<table><tr><th>Índice</th><th>Valor</th></tr>");
+                        sb.append("<tr><td>Chi-cuadrado (χ²)</td><td>").append(rchi.getChiCuadrado()).append("</td></tr>");
+                        sb.append("<tr><td>Grados de libertad (gl)</td><td>").append(rchi.getGradosLibertad()).append("</td></tr>");
+                        sb.append("<tr><td>Valor p (p-value)</td><td>").append(rchi.getValorP()).append("</td></tr>");
+                        sb.append("<tr><td>Resultado de independencia</td><td><b>").append(rchi.isIndependiente() ? "No se rechaza H₀ (independiente, p ≥ 0.05)" : "Se rechaza H₀ (asociación significativa, p < 0.05)").append("</b></td></tr>");
+                        sb.append("<tr><td>Datos suficientes</td><td>").append((tieneF != null && tieneF) ? "SÍ" : "NO").append("</td></tr>");
+                        sb.append("<tr><td>Interpretación</td><td>").append(esc(rchi.getInterpretacion())).append("</td></tr>");
+                        sb.append("</table>");
                     }
                 }
                 case "empleabilidad" -> {
-                    sb.append("<h2>5. Empleabilidad y Ofertas con poca demanda</h2>");
-                    
-                    // Tablas HTML
-                    sb.append("<h3>Áreas con mayor empleabilidad</h3><table><tr><th>ÁREA</th><th class='num'>DEMANDA EMPL.(%)</th><th class='num'>INTERÉS TIT.(%)</th><th class='num'>EMPLEABILIDAD(%)</th></tr>");
-                    for (AreaEmpleabilidad a:EncuestaDAO.analisisEmpleabilidad()) sb.append("<tr><td>").append(esc(a.getArea())).append("</td><td class='num'>").append(a.getDemandaEmpleador()).append("</td><td class='num'>").append(a.getInteresTitulados()).append("</td><td class='num'><strong>").append(a.getEmpleabilidad()).append("</strong></td></tr>");
+                    sb.append("<h2>5. Análisis de Empleabilidad y Barreras de Inserción</h2>");
+
+                    // =====================================================================
+                    // 1. ESTADÍSTICOS DE ANTIGÜEDAD PROFESIONAL (p12)
+                    // =====================================================================
+                    sb.append("<h3>Estadísticos de Antigüedad Profesional (p12)</h3>");
+                    var respP12 = EncuestaDAO.contarRespuestas(12);
+                    var valsAnt = new ArrayList<Double>();
+                    var freqAnt = new LinkedHashMap<Double, Integer>();
+                    for (ConteoRespuesta c : respP12) {
+                        if (c.getRespuesta() == null) continue;
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+(?:[.,]\\d+)?)").matcher(c.getRespuesta());
+                        if (m.find()) {
+                            double v = Double.parseDouble(m.group(1).replace(',', '.'));
+                            int tot = c.getTotal();
+                            freqAnt.put(v, freqAnt.getOrDefault(v, 0) + tot);
+                            for (int i = 0; i < tot; i++) valsAnt.add(v);
+                        }
+                    }
+                    Collections.sort(valsAnt);
+                    int nValid = valsAnt.size();
+                    double sumaAnt = 0;
+                    for (double v : valsAnt) sumaAnt += v;
+                    double mediaAnt = nValid == 0 ? 0.0 : sumaAnt / nValid;
+                    double medianaAnt = 0.0;
+                    if (nValid > 0) {
+                        medianaAnt = (nValid % 2 == 1)
+                                ? valsAnt.get(nValid / 2)
+                                : (valsAnt.get(nValid / 2 - 1) + valsAnt.get(nValid / 2)) / 2.0;
+                    }
+                    double modaAnt = 0.0;
+                    int maxFreqAnt = -1;
+                    for (var entry : freqAnt.entrySet()) {
+                        if (entry.getValue() > maxFreqAnt) {
+                            maxFreqAnt = entry.getValue();
+                            modaAnt = entry.getKey();
+                        }
+                    }
+                    double sumSq = 0;
+                    for (double v : valsAnt) sumSq += Math.pow(v - mediaAnt, 2);
+                    double desvAnt = nValid > 1 ? Math.sqrt(sumSq / (nValid - 1)) : 0.0;
+
+                    sb.append("<table><tr><th>Titulados válidos</th><th>Media</th><th>Mediana</th><th>Moda</th><th>Desv. Estándar</th></tr>");
+                    sb.append("<tr><td>").append(nValid).append("</td><td><b>")
+                      .append(DF2.format(mediaAnt)).append(" años</b></td><td><b>")
+                      .append(DF2.format(medianaAnt)).append(" años</b></td><td><b>")
+                      .append(DF2.format(modaAnt)).append(" año(s)</b></td><td><b>")
+                      .append(DF2.format(desvAnt)).append(" años</b></td></tr></table>");
+
+                    // =====================================================================
+                    // 2. DEMANDA DE EMPRESAS VS. INTERÉS DE GRADUADOS
+                    // =====================================================================
+                    sb.append("<h3>Demanda de Empresas vs. Interés de Graduados</h3>");
+                    var aeH = EncuestaDAO.analisisEmpleabilidad();
+                    sb.append("<table><tr><th>ÁREA</th><th class='num'>DEMANDA EMPL. (%)</th><th class='num'>INTERÉS TIT. (%)</th><th class='num'>EMPLEABILIDAD (%)</th></tr>");
+                    for (AreaEmpleabilidad a : aeH) {
+                        sb.append("<tr><td>").append(esc(a.getArea())).append("</td><td class='num'>")
+                          .append(DF2.format(a.getDemandaEmpleador())).append("</td><td class='num'>")
+                          .append(DF2.format(a.getInteresTitulados())).append("</td><td class='num'><strong>")
+                          .append(DF2.format(a.getEmpleabilidad())).append("</strong></td></tr>");
+                    }
                     sb.append("</table>");
-                    
-                    htmlSimpleBlock(sb, "Razones críticas (p28)", razonesCriticas());
-                    htmlSimpleBlock(sb, "Asignaturas con poca utilidad (p44) - Top", asignaturasPocaTop(20));
-                    htmlSimpleBlock(sb, "Rubros de inversión/requerimientos (p53)", EncuestaDAO.contarRespuestas(53));
-                    htmlSimpleBlock(sb, "Posibilidad de contratación de titulados (p55)", EncuestaDAO.contarRespuestas(55));
-                    
-                    // ==========================================
-                    // RENDERIZADO DE LOS 5 GRÁFICOS COMPLETOS
-                    // ==========================================
-                    
-                    // 1. Empleabilidad por área (Multi-serie)
-                    List<AreaEmpleabilidad> aeH = EncuestaDAO.analisisEmpleabilidad();
+
                     List<String> catsE = aeH.stream().map(AreaEmpleabilidad::getArea).collect(java.util.stream.Collectors.toList());
                     List<List<Double>> serE = Arrays.asList(
                             aeH.stream().map(a -> (double) a.getDemandaEmpleador()).collect(java.util.stream.Collectors.toList()),
                             aeH.stream().map(a -> (double) a.getInteresTitulados()).collect(java.util.stream.Collectors.toList()),
                             aeH.stream().map(AreaEmpleabilidad::getEmpleabilidad).collect(java.util.stream.Collectors.toList()));
-                            
-                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
-                    .append(htmlChart("Empleabilidad por área (%)", chartBarMulti("", "Área", "Porcentaje",
-                            catsE, Arrays.asList("Demanda empleador", "Interés titulados", "Empleabilidad"), serE)))
-                    .append("</div>");
-                    
-                    // 2. Razones críticas (p28)
-                    List<ConteoRespuesta> crH = razonesCriticas();
-                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
-                    .append(htmlChart("Oferta con poca demanda: razones críticas (p28)", chartBar("", "Razón", "Frecuencia",
-                            crH.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            crH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")))
-                    .append("</div>");
-                    
-                    // 3. Asignaturas con poca utilidad (p44)
-                    List<ConteoRespuesta> asigH = asignaturasPocaTop(20);
-                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
-                    .append(htmlChart("Asignaturas con poca utilidad laboral (p44) - Top", chartBar("", "Asignatura", "Menciones",
-                            asigH.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            asigH.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Menciones")))
-                    .append("</div>");
-                    
-                    // 4. Rubros de Inversión (p53)
-                    List<ConteoRespuesta> r53H = EncuestaDAO.contarRespuestas(53);
-                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
-                    .append(htmlChart("Rubros de inversión / requerimientos (p53)", chartBar("", "Rubro", "Frecuencia",
-                            r53H.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            r53H.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Frecuencia")))
-                    .append("</div>");
-                    
-                    // 5. Posibilidad de Contratación (p55)
-                    List<ConteoRespuesta> r55H = EncuestaDAO.contarRespuestas(55);
-                    sb.append("<div style='margin-top: 25px; margin-bottom: 25px; page-break-inside: avoid;'>")
-                    .append(htmlChart("Posibilidad de contratación de titulados (p55)", chartPie("",
-                            r55H.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
-                            r55H.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()))))
-                    .append("</div>");
+                    sb.append("<div style='margin-top: 15px; margin-bottom: 15px; page-break-inside: avoid;'>")
+                      .append(htmlChart("Demanda de Empresas vs. Interés de Graduados (%)", chartBarMulti("", "Área", "Porcentaje",
+                              catsE, Arrays.asList("Demanda empleador (%)", "Interés titulados (%)", "Empleabilidad (%)"), serE)))
+                      .append("</div>");
+
+                    // =====================================================================
+                    // 3. MOTIVOS PRINCIPALES DE DESEMPLEO (p28 - TODAS LAS RAZONES)
+                    // =====================================================================
+                    var motivos28 = EncuestaDAO.contarRespuestas(28);
+                    htmlSimpleBlock(sb, "Motivos Principales de Desempleo (p28)", motivos28);
+                    sb.append("<div style='margin-top: 15px; margin-bottom: 15px; page-break-inside: avoid;'>")
+                      .append(htmlChart("Motivos Principales de Desempleo (p28)", chartBar("", "Razón", "Total",
+                              motivos28.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                              motivos28.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Total")))
+                      .append("</div>");
+
+                    // =====================================================================
+                    // 4. MATERIAS CON MENOR IMPACTO LABORAL (p44 - % SOBRE TITULADOS)
+                    // =====================================================================
+                    var asig44 = EncuestaDAO.asignaturasFrecuencia(44);
+                    sb.append("<h3>Materias con Menor Impacto Laboral (p44)</h3>");
+                    sb.append("<table><tr><th>ASIGNATURA</th><th class='num'>TOTAL</th><th class='num'>% TITULADOS</th></tr>");
+                    for (ConteoRespuesta c : asig44) {
+                        sb.append("<tr><td>").append(esc(c.getRespuesta())).append("</td><td class='num'>")
+                          .append(c.getTotal()).append("</td><td class='num'>")
+                          .append(DF2.format(c.getPorcentaje())).append("%</td></tr>");
+                    }
+                    sb.append("</table>");
+                    sb.append("<div style='margin-top: 15px; margin-bottom: 15px; page-break-inside: avoid;'>")
+                      .append(htmlChart("Materias con Menor Impacto Laboral (p44)", chartBar("", "Asignatura", "Menciones",
+                              asig44.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                              asig44.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Menciones")))
+                      .append("</div>");
+
+                    // =====================================================================
+                    // 5. PERFIL DEL SECTOR EMPRESARIAL: RUBRO PRINCIPAL (p53)
+                    // =====================================================================
+                    var r53H = EncuestaDAO.contarRespuestas(53);
+                    htmlSimpleBlock(sb, "Perfil del Sector Empresarial · Rubro principal (p53)", r53H);
+                    sb.append("<div style='margin-top: 15px; margin-bottom: 15px; page-break-inside: avoid;'>")
+                      .append(htmlChart("Rubros del Sector Empresarial (p53)", chartBar("", "Rubro", "Frecuencia",
+                              r53H.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                              r53H.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()), "Frecuencia")))
+                      .append("</div>");
+
+                    // =====================================================================
+                    // 6. PERFIL DEL SECTOR EMPRESARIAL: POSIBILIDAD DE INCORPORAR (p55)
+                    // =====================================================================
+                    var r55H = EncuestaDAO.contarRespuestas(55);
+                    htmlSimpleBlock(sb, "Perfil del Sector Empresarial · Posibilidad de incorporar (p55)", r55H);
+                    sb.append("<div style='margin-top: 15px; margin-bottom: 15px; page-break-inside: avoid;'>")
+                      .append(htmlChart("Posibilidad de Incorporar Titulados (p55)", chartPie("",
+                              r55H.stream().map(ConteoRespuesta::getRespuesta).collect(java.util.stream.Collectors.toList()),
+                              r55H.stream().map(c -> (double) c.getTotal()).collect(java.util.stream.Collectors.toList()))))
+                      .append("</div>");
+
+                    // =====================================================================
+                    // 7. RESUMEN Y RECOMENDACIÓN
+                    // =====================================================================
+                    sb.append("<h3>Resumen y recomendación</h3><ul>");
+                    StringBuilder topAreas = new StringBuilder();
+                    for (int i = 0; i < aeH.size(); i++) {
+                        AreaEmpleabilidad a = aeH.get(i);
+                        if (i > 0) topAreas.append(", ");
+                        topAreas.append(a.getArea()).append(" ").append(DF2.format(a.getEmpleabilidad())).append("%");
+                    }
+                    sb.append("<li><b>Áreas con mayor empleabilidad:</b> ").append(esc(topAreas.toString())).append(".</li>");
+                    sb.append("<li><b>Oferta con poca demanda:</b> priorizar revisión de las razones críticas, las asignaturas de poca utilidad y la posibilidad real de contratación, cruzando con las áreas de mayor empleabilidad.</li>");
+                    sb.append("</ul>");
                 }
                 case "ubicacion" -> {
                     // 1. Título principal limpio (sin HU11)
@@ -2502,7 +3149,7 @@ public class ExportController {
                 default -> sb.append("<p>Tipo de reporte no soportado para exportación completa.</p>");
             }
         } catch (Exception e) {
-            sb.append("<p style='color:#dc3545'><strong>ERROR:</strong> ").append(esc(e.getMessage())).append("</p>");
+            throw new RuntimeException("No se pudo construir el reporte '" + tipo + "': " + mensajeError(e), e);
         }
         sb.append("</body></html>");
         return sb.toString();
@@ -2622,7 +3269,7 @@ public class ExportController {
                 int valor = tabla.celdas().get(i).get(j);
                 int denominador = porcentajeFila ? tabla.totalesFila().get(i) : tabla.total();
                 sb.append("<td class='num'>").append(valor)
-                        .append("<br><small>").append(DF2.format(pctDe(valor, denominador)))
+                        .append("<br/><small>").append(DF2.format(pctDe(valor, denominador)))
                         .append("%</small></td>");
             }
             sb.append("<td class='num'>").append(tabla.totalesFila().get(i)).append("</td></tr>");
@@ -2685,7 +3332,7 @@ public class ExportController {
                         ? tabla.totalesFila().get(i)
                         : tabla.total();
                 sb.append("<td class='num'>").append(valor)
-                        .append("<br><small>").append(DF2.format(pctDe(valor, denominador)))
+                        .append("<br/><small>").append(DF2.format(pctDe(valor, denominador)))
                         .append("%</small></td>");
             }
             sb.append("<td class='num'>").append(tabla.totalesFila().get(i)).append("</td></tr>");

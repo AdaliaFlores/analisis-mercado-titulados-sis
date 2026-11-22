@@ -8,7 +8,11 @@
 
   window.cargarReporteBrechas = async function () {
     const cont = document.getElementById('contenedorBrechas');
-    cont.innerHTML = '<p class="text-muted">Cargando reporte...</p>';
+    cont.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <div class="spinner-border text-warning mb-3" role="status" aria-hidden="true"></div>
+        <p class="text-muted mb-0">Cargando evaluación de brechas y competencias...</p>
+      </div>`;
     charts.forEach(c => { try { c.destroy(); } catch (e) {} });
     charts = [];
 

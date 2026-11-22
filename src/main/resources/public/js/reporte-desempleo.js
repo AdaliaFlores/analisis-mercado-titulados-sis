@@ -182,7 +182,11 @@
   window.cargarReporteDesempleo = async function () {
     const cont = document.getElementById('contenedorDesempleo');
     if (!cont) return;
-    cont.innerHTML = '<div class="col-12"><p class="text-muted">Cargando reporte...</p></div>';
+    cont.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <div class="spinner-border text-danger mb-3" role="status" aria-hidden="true"></div>
+        <p class="text-muted mb-0">Cargando desempleo y barreras de inserción...</p>
+      </div>`;
     try {
       const res = await fetch('/api/reportes/desempleo');
       if (!res.ok) throw new Error('HTTP ' + res.status);

@@ -161,25 +161,24 @@ public class EncuestaDAO {
 
     public static void guardarRespuestas(RespuestaDTO dto) throws SQLException {
         String sql = "INSERT INTO respuestas (envio_id, encuesta_id, pregunta_id, respuesta) VALUES (?, ?, ?, ?)";
-        try (Connection conn = Database.getConnection();
-            PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Database.getConnection()) {
+            // Valida el payload completo antes de abrir la transacción de escritura.
+            Map<Integer, String> respuestas = ReglasEncuesta.validar(conn, dto);
+
             conn.setAutoCommit(false);
-            try {
-                java.util.UUID envioId = java.util.UUID.randomUUID(); 
-                if (dto.getRespuestas() != null) {
-                    for (Map.Entry<String, String> entry : dto.getRespuestas().entrySet()) {
-                        int preguntaId = Integer.parseInt(entry.getKey().replace("p_", ""));
-                        stmt.setObject(1, envioId);
-                        stmt.setInt(2, dto.getEncuestaId());
-                        stmt.setInt(3, preguntaId);
-                        stmt.setString(4, entry.getValue());
-                        stmt.addBatch();
-                    }
-                    stmt.executeBatch();
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                java.util.UUID envioId = java.util.UUID.randomUUID();
+                for (Map.Entry<Integer, String> entry : respuestas.entrySet()) {
+                    stmt.setObject(1, envioId);
+                    stmt.setInt(2, dto.getEncuestaId());
+                    stmt.setInt(3, entry.getKey());
+                    stmt.setString(4, entry.getValue());
+                    stmt.addBatch();
                 }
+                stmt.executeBatch();
                 conn.commit();
             } catch (Exception e) {
-                conn.rollback();          
+                conn.rollback();
                 throw e;
             } finally {
                 conn.setAutoCommit(true);

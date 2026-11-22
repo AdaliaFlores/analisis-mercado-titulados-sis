@@ -1,6 +1,10 @@
 async function cargarReporteEmprendimiento() {
   const cont = document.getElementById('contenedorGraficos');
-  cont.innerHTML = '<p class="text-muted">Cargando reporte...</p>';
+  cont.innerHTML = `
+    <div class="col-12 text-center py-5">
+      <div class="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
+      <p class="text-muted mb-0">Cargando ecosistema de emprendimiento...</p>
+    </div>`;
   try {
     const res = await fetch('/api/reportes/emprendimiento');
     if (!res.ok) throw new Error('HTTP ' + res.status);

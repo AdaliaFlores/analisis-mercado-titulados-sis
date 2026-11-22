@@ -108,9 +108,8 @@
         <tbody>${cuerpo}${pie}</tbody></table></div>`;
   }
 
-  // Ejecuta una sección: muestra "Cargando", la dibuja y aísla sus errores
+  // Ejecuta una sección y aísla sus errores; el spinner global lo controla actualizar().
   async function correr(id, mi, fn) {
-    $(id).innerHTML = '<p class="text-muted small">Cargando…</p>';
     try {
       const r = await fn();
       if (mi !== version) return;
@@ -279,9 +278,15 @@
   // ---------- Orquestación ----------
   function esqueleto() {
     $('contenedorUbicacion').innerHTML =
+      `<div id="uCargador" class="text-center py-5">
+         <div class="spinner-border text-danger mb-3" role="status" aria-hidden="true"></div>
+         <p class="text-muted mb-0">Cargando pertinencia, geografía y fuga de talento...</p>
+       </div>` +
+      '<div id="uSecciones" class="d-none">' +
       '<div id="uKpis" class="row g-3 mb-4"></div>' +
       ['uDonde', 'uSalario', 'uCargoPert', 'uCruceSalario', 'uCruceCargo', 'uCruceUbic']
-        .map(id => `<div id="${id}" class="mb-4"></div>`).join('');
+        .map(id => `<div id="${id}" class="mb-4"></div>`).join('') +
+      '</div>';
   }
 
   async function actualizar() {
@@ -290,30 +295,44 @@
     esqueleto();
     const qs = qsFiltros(filtrosActuales());
     const P = CFG.p;
-    await Promise.all([
-      correr('uKpis', mi, () => kpis(qs)),
-      correr('uDonde', mi, () => dondeTrabajan(qs)),
-      correr('uSalario', mi, () => promedio(
-        'Salario promedio mensual por departamento',
-        'Estimación con el punto medio de cada rango salarial (el rango «Más de Bs. 10.000» se toma como Bs. 12.000).',
-        P.salario, P.departamento, qs, { prefijo: 'Bs. ', decimales: 0, columna: 'Departamento', canvas: 'gSalario' })),
-      correr('uCargoPert', mi, () => promedio(
-        'Pertinencia promedio por cargo',
-        'Escala de 1 (totalmente en desacuerdo) a 4 (totalmente de acuerdo) sobre si las labores son pertinentes a la formación.',
-        P.pertinencia, P.cargo, qs, { decimales: 2, columna: 'Cargo', canvas: 'gCargoPert' })),
-      correr('uCruceSalario', mi, () => cruce(
-        'Ubicación × nivel salarial',
-        '¿El nivel salarial depende de dónde trabaja el titulado?',
-        P.departamento, P.salario, 'Departamento', 'Rango salarial', qs, 'gCruceSalario')),
-      correr('uCruceCargo', mi, () => cruce(
-        'Cargo × pertinencia de la formación',
-        'Barras apiladas: cómo se distribuye la pertinencia dentro de cada cargo.',
-        P.cargo, P.pertinencia, 'Cargo', 'Pertinencia', qs, 'gCruceCargo')),
-      correr('uCruceUbic', mi, () => cruce(
-        'Ubicación × pertinencia de la formación',
-        '¿La pertinencia del puesto cambia según el lugar de trabajo?',
-        P.departamento, P.pertinencia, 'Departamento', 'Pertinencia', qs, 'gCruceUbic'))
-    ]);
+    try {
+      await Promise.all([
+        correr('uKpis', mi, () => kpis(qs)),
+        correr('uDonde', mi, () => dondeTrabajan(qs)),
+        correr('uSalario', mi, () => promedio(
+          'Salario promedio mensual por departamento',
+          'Estimación con el punto medio de cada rango salarial (el rango «Más de Bs. 10.000» se toma como Bs. 12.000).',
+          P.salario, P.departamento, qs, { prefijo: 'Bs. ', decimales: 0, columna: 'Departamento', canvas: 'gSalario' })),
+        correr('uCargoPert', mi, () => promedio(
+          'Pertinencia promedio por cargo',
+          'Escala de 1 (totalmente en desacuerdo) a 4 (totalmente de acuerdo) sobre si las labores son pertinentes a la formación.',
+          P.pertinencia, P.cargo, qs, { decimales: 2, columna: 'Cargo', canvas: 'gCargoPert' })),
+        correr('uCruceSalario', mi, () => cruce(
+          'Ubicación × nivel salarial',
+          '¿El nivel salarial depende de dónde trabaja el titulado?',
+          P.departamento, P.salario, 'Departamento', 'Rango salarial', qs, 'gCruceSalario')),
+        correr('uCruceCargo', mi, () => cruce(
+          'Cargo × pertinencia de la formación',
+          'Barras apiladas: cómo se distribuye la pertinencia dentro de cada cargo.',
+          P.cargo, P.pertinencia, 'Cargo', 'Pertinencia', qs, 'gCruceCargo')),
+        correr('uCruceUbic', mi, () => cruce(
+          'Ubicación × pertinencia de la formación',
+          '¿La pertinencia del puesto cambia según el lugar de trabajo?',
+          P.departamento, P.pertinencia, 'Departamento', 'Pertinencia', qs, 'gCruceUbic'))
+      ]);
+    } finally {
+      if (mi === version) {
+        const cargador = $('uCargador');
+        if (cargador) cargador.remove();
+        const secciones = $('uSecciones');
+        if (secciones) secciones.classList.remove('d-none');
+        // Los gráficos se crearon mientras las secciones estaban ocultas:
+        // se recalcula su tamaño al mostrarlas.
+        Object.values(graficos).forEach(g => {
+          try { g.resize(); } catch (e) { /* gráfico ya destruido */ }
+        });
+      }
+    }
   }
 
   window.cargarReporteUbicacion = async function () {

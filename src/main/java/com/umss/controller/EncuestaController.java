@@ -1,12 +1,15 @@
 package com.umss.controller;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Map;
 
 import com.umss.config.Database;
 import com.umss.dao.EncuestaDAO;
 import com.umss.dao.ExcelImporterService;
 import com.umss.model.RespuestaDTO;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.UploadedFile;
 
@@ -31,12 +34,28 @@ public class EncuestaController {
 
     public static void guardarRespuesta(Context ctx) {
         try {
+            if (ctx.body() == null || ctx.body().isBlank()) {
+                ctx.status(400).result("El cuerpo de la solicitud es obligatorio.");
+                return;
+            }
             RespuestaDTO dto = ctx.bodyAsClass(RespuestaDTO.class);
             EncuestaDAO.guardarRespuestas(dto);
             ctx.status(201).result("Respuestas guardadas exitosamente");
-        } catch (Exception e) {
+        } catch (BadRequestResponse e) {
+            ctx.status(400).result("El contenido de la solicitud no es un JSON válido.");
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).result(e.getMessage());
+        } catch (SQLException e) {
+            // No se expone el detalle técnico de la base de datos al cliente.
             e.printStackTrace();
-            ctx.status(500).result("Error al guardar respuestas: " + e.getMessage());
+            ctx.status(500).result("No se pudieron guardar las respuestas. Intente nuevamente.");
+        } catch (Exception e) {
+            if (e instanceof JsonProcessingException) {
+                ctx.status(400).result("El contenido de la solicitud no es un JSON válido.");
+                return;
+            }
+            e.printStackTrace();
+            ctx.status(500).result("Ocurrió un error inesperado al guardar las respuestas.");
         }
     }
 

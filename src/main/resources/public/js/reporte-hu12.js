@@ -248,9 +248,13 @@
     }
 
     async function cargarGrupo(preguntas, contenedor, prefijo, version) {
+        const mensajeCarga = prefijo === 'demanda'
+            ? 'Cargando demanda empresarial...'
+            : 'Cargando percepción del empleador...';
         contenedor.innerHTML = `
-            <div class="col-12">
-                <p class="text-muted">Cargando preguntas...</p>
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
+                <p class="text-muted mb-0">${mensajeCarga}</p>
             </div>`;
 
         const resultados = await Promise.all(
@@ -420,7 +424,11 @@
 
     async function cargaralumno(version) {
         const contenedor = $('hu12Contenidoalumno');
-        contenedor.innerHTML = '<p class="text-muted">Cargando información alumno...</p>';
+        contenedor.innerHTML = `
+            <div class="w-100 text-center py-5">
+                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
+                <p class="text-muted mb-0">Cargando red de alumnos...</p>
+            </div>`;
 
         try {
             const datos = await consultar(API_alumno);
@@ -448,8 +456,16 @@
             return;
         }
 
-        demanda.innerHTML = '<p class="text-muted">Cargando demanda empresarial...</p>';
-        percepcion.innerHTML = '<p class="text-muted">Cargando percepción de empleadores...</p>';
+        demanda.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
+                <p class="text-muted mb-0">Cargando demanda empresarial...</p>
+            </div>`;
+        percepcion.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
+                <p class="text-muted mb-0">Cargando percepción del empleador...</p>
+            </div>`;
 
         await Promise.all([
             cargarGrupo(PREGUNTAS_DEMANDA, demanda, 'demanda', version),

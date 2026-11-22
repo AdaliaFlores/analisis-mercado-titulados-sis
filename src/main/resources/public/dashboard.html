@@ -383,6 +383,18 @@
                         <button class="btn btn-outline-danger" onclick="exportar('pdf', this)">Descargar PDF</button>
                     </div>
 
+                    <!-- ERROR DE EXPORTACIÓN (Oculto inicialmente) -->
+                    <div id="exportError" class="alert alert-danger d-none mt-3 mb-0" role="alert">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="small">
+                                <strong>No se pudo generar el archivo.</strong>
+                                <div id="exportErrorMsg" class="mt-1"></div>
+                            </div>
+                            <button type="button" class="btn-close" aria-label="Cerrar"
+                                onclick="document.getElementById('exportError').classList.add('d-none')"></button>
+                        </div>
+                    </div>
+
                     <!-- BARRA DE PROGRESO (Oculta inicialmente) -->
                     <div id="exportProgressContainer" class="mt-3" style="display: none;">
                         <div class="d-flex justify-content-between mb-1">
@@ -406,10 +418,26 @@
     </div>
     
     <script>
+      // Tiempo máximo de espera para una exportación (4 minutos; reportes grandes pueden tardar).
+      const TIEMPO_MAX_EXPORTACION_MS = 240000;
+
+      function mostrarErrorExportacion(mensaje) {
+            const caja = document.getElementById('exportError');
+            const texto = document.getElementById('exportErrorMsg');
+            if (!caja || !texto) return;
+            texto.textContent = mensaje;
+            caja.classList.remove('d-none');
+      }
+
+      function ocultarErrorExportacion() {
+            const caja = document.getElementById('exportError');
+            if (caja) caja.classList.add('d-none');
+      }
+
       async function exportar(formato, btn) {
             const tipo = document.getElementById('selExportTipo').value;
             const url = '/api/export/' + formato + '?tipo=' + encodeURIComponent(tipo);
-            
+
             // Elementos del modal
             const modalEl = document.getElementById('modalExport');
             const btns = modalEl.querySelectorAll('button');
@@ -425,6 +453,7 @@
             const originalText = btn.innerHTML;
             let progreso = 0;
             let intervaloProgreso = null;
+            let temporizadorEspera = null;
 
             // Función auxiliar para pintar el porcentaje
             const actualizarBarra = (pct, texto) => {
@@ -434,6 +463,9 @@
             progressPct.textContent = pct + '%';
             if (texto) progressLabel.textContent = texto;
             };
+
+            // Cada reintento parte sin el mensaje de error anterior
+            ocultarErrorExportacion();
 
             try {
             // 1. Bloquear botones y ocultar la 'X' de cierre
@@ -448,7 +480,7 @@
             progressContainer.style.display = 'block';
             actualizarBarra(5, 'Consultando base de datos y generando gráficos...');
 
-            // Avanzar progresivamente hasta 90% mientras el servidor construye el reporte
+            // Avanzar progresivamente hasta 95% mientras el servidor construye el reporte
             intervaloProgreso = setInterval(() => {
                 if (progreso < 40) {
                 actualizarBarra(progreso + 5, 'Consultando base de datos...');
@@ -462,12 +494,35 @@
                 }
             }, 800);
 
-            // 3. Petición al servidor
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Error al generar el reporte');
+            // 3. Petición al servidor (con tiempo máximo de espera)
+            const controlador = new AbortController();
+            temporizadorEspera = setTimeout(() => controlador.abort(), TIEMPO_MAX_EXPORTACION_MS);
+
+            const response = await fetch(url, { signal: controlador.signal });
+            if (!response.ok) {
+                // El backend devuelve el detalle en texto plano; se muestra tal cual.
+                let detalle = '';
+                try {
+                    const cuerpo = await response.text();
+                    try {
+                        const json = JSON.parse(cuerpo);
+                        detalle = (json && (json.error || json.mensaje)) || cuerpo;
+                    } catch (e) {
+                        detalle = cuerpo;
+                    }
+                } catch (e) { /* respuesta sin cuerpo */ }
+
+                if (response.status === 401) {
+                    throw new Error('La sesión expiró. Vuelva a iniciar sesión para exportar.');
+                }
+                detalle = (detalle || '').trim();
+                throw new Error(detalle
+                    ? `El servidor devolvió un error (${response.status}): ${detalle}`
+                    : `El servidor devolvió un error (${response.status}) al generar el archivo.`);
+            }
 
             const blob = await response.blob();
-            
+
             // 4. Completar al 100%
             clearInterval(intervaloProgreso);
             progressBar.classList.remove('bg-primary');
@@ -488,16 +543,28 @@
             await new Promise(resolve => setTimeout(resolve, 1200));
 
             } catch (error) {
-            clearInterval(intervaloProgreso);
-            alert('Ocurrió un error al generar el archivo. Por favor reintente.');
+            const esTiempoAgotado = error && error.name === 'AbortError';
+            if (esTiempoAgotado) {
+                mostrarErrorExportacion(
+                    `La generación superó el tiempo de espera (${Math.round(TIEMPO_MAX_EXPORTACION_MS / 1000)} s). ` +
+                    'Reintente o elija otro reporte.');
+            } else {
+                mostrarErrorExportacion(error && error.message
+                    ? error.message
+                    : 'Ocurrió un error al generar el archivo. Por favor reintente.');
+            }
             console.error(error);
             } finally {
-            // 5. Restaurar modal a su estado original
+            // 5. Restaurar modal a su estado original para permitir reintentar
+            clearInterval(intervaloProgreso);
+            clearTimeout(temporizadorEspera);
             btn.innerHTML = originalText;
             btns.forEach(b => b.disabled = false);
             selectTipo.disabled = false;
             if (btnClose) btnClose.style.display = 'block';
             progressContainer.style.display = 'none';
+            progressBar.classList.remove('bg-success');
+            progressBar.classList.add('bg-primary');
             actualizarBarra(0, '');
             }
         }
