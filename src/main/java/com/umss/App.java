@@ -18,7 +18,7 @@ public class App {
     public static void main(String[] args) {
 
         int port = Integer.parseInt(
-            System.getenv().getOrDefault("PORT", "7070")
+            System.getenv().getOrDefault("PORT", "8080")
         );
 
         var app = Javalin.create(config -> {
@@ -149,7 +149,7 @@ public class App {
             EncuestaController::importarExcelEmpleadores);
 
         // Iniciar servidor en el puerto proporcionado por Render
-        app.start("127.0.0.1", port);
+        app.start("0.0.0.0", port);
 
         System.out.println("Servidor iniciado en el puerto " + port);
     }

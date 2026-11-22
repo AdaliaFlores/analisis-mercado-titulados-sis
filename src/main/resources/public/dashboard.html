@@ -355,7 +355,8 @@
     </div>
 
         <!-- Modal Exportación de Datos -->
-    <div class="modal fade" id="modalExport" tabindex="-1">
+    <!-- Modal Exportación de Datos (Bloqueado durante la descarga y con Barra de Progreso) -->
+    <div class="modal fade" id="modalExport" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -365,21 +366,51 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Seleccionar reporte a exportar</label>
-                            <select id="selExportTipo" class="form-select">
+                        <select id="selExportTipo" class="form-select">
                             <option value="brechas">Evaluación de Brechas y Competencias</option>
-                            <option value="emprendimiento">Ecosistema de Emprendimiento e Innovación</option>
-                            <option value="desempleo">Desempleo y Barreras</option>
+                            <option value="emprendimiento">Ecosistema de Emprendimiento e Innovación </option>
+                            <option value="desempleo">Desempleo y Barreras </option>
                             <option value="formacion">Formación continua y Financiamiento</option>
                             <option value="empleabilidad">Empleabilidad y Ofertas con poca demanda</option>
                             <option value="ubicacion">Pertinencia, Geografía y Fuga de Talentos</option>
                             <option value="hu12">Demanda Empresarial y Red Alumno</option>
                         </select>
                     </div>
+
                     <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-outline-secondary" onclick="exportar('csv')">Descargar CSV</button>
-                        <button class="btn btn-outline-success" onclick="exportar('excel')">Descargar Excel (.XLSX)</button>
-                        <button class="btn btn-outline-danger" onclick="exportar('pdf')">Descargar PDF</button>
+                        <button class="btn btn-outline-secondary" onclick="exportar('csv', this)">Descargar CSV</button>
+                        <button class="btn btn-outline-success" onclick="exportar('excel', this)">Descargar Excel (.XLSX)</button>
+                        <button class="btn btn-outline-danger" onclick="exportar('pdf', this)">Descargar PDF</button>
                     </div>
+
+                    <!-- ERROR DE EXPORTACIÓN (Oculto inicialmente) -->
+                    <div id="exportError" class="alert alert-danger d-none mt-3 mb-0" role="alert">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="small">
+                                <strong>No se pudo generar el archivo.</strong>
+                                <div id="exportErrorMsg" class="mt-1"></div>
+                            </div>
+                            <button type="button" class="btn-close" aria-label="Cerrar"
+                                onclick="document.getElementById('exportError').classList.add('d-none')"></button>
+                        </div>
+                    </div>
+
+                    <!-- BARRA DE PROGRESO (Oculta inicialmente) -->
+                    <div id="exportProgressContainer" class="mt-3" style="display: none;">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span id="exportProgressLabel" class="small fw-semibold text-primary">Procesando datos en el servidor...</span>
+                            <span id="exportProgressPct" class="small fw-bold text-primary">0%</span>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div id="exportProgressBar" 
+                                class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                role="progressbar" 
+                                style="width: 0%;" 
+                                aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="small text-muted mt-3">Las exportaciones incluyen matrices de frecuencia cruzada, frecuencias absolutas/relativas y datos tabulares listos para sustentar el Plan de Desarrollo Estratégico.</div>
                 </div>
             </div>
@@ -387,11 +418,156 @@
     </div>
     
     <script>
-      function exportar(formato) {
-        const tipo = document.getElementById('selExportTipo').value;
-        const url = '/api/export/' + formato + '?tipo=' + encodeURIComponent(tipo);
-        window.location.href = url;
+      // Tiempo máximo de espera para una exportación (4 minutos; reportes grandes pueden tardar).
+      const TIEMPO_MAX_EXPORTACION_MS = 240000;
+
+      function mostrarErrorExportacion(mensaje) {
+            const caja = document.getElementById('exportError');
+            const texto = document.getElementById('exportErrorMsg');
+            if (!caja || !texto) return;
+            texto.textContent = mensaje;
+            caja.classList.remove('d-none');
       }
+
+      function ocultarErrorExportacion() {
+            const caja = document.getElementById('exportError');
+            if (caja) caja.classList.add('d-none');
+      }
+
+      async function exportar(formato, btn) {
+            const tipo = document.getElementById('selExportTipo').value;
+            const url = '/api/export/' + formato + '?tipo=' + encodeURIComponent(tipo);
+
+            // Elementos del modal
+            const modalEl = document.getElementById('modalExport');
+            const btns = modalEl.querySelectorAll('button');
+            const selectTipo = document.getElementById('selExportTipo');
+            const btnClose = modalEl.querySelector('.btn-close');
+
+            // Elementos de la barra de progreso
+            const progressContainer = document.getElementById('exportProgressContainer');
+            const progressBar = document.getElementById('exportProgressBar');
+            const progressPct = document.getElementById('exportProgressPct');
+            const progressLabel = document.getElementById('exportProgressLabel');
+
+            const originalText = btn.innerHTML;
+            let progreso = 0;
+            let intervaloProgreso = null;
+            let temporizadorEspera = null;
+
+            // Función auxiliar para pintar el porcentaje
+            const actualizarBarra = (pct, texto) => {
+            progreso = pct;
+            progressBar.style.width = pct + '%';
+            progressBar.setAttribute('aria-valuenow', pct);
+            progressPct.textContent = pct + '%';
+            if (texto) progressLabel.textContent = texto;
+            };
+
+            // Cada reintento parte sin el mensaje de error anterior
+            ocultarErrorExportacion();
+
+            try {
+            // 1. Bloquear botones y ocultar la 'X' de cierre
+            btns.forEach(b => b.disabled = true);
+            selectTipo.disabled = true;
+            if (btnClose) btnClose.style.display = 'none';
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Generando...`;
+
+            // 2. Mostrar y arrancar barra de progreso
+            progressBar.classList.remove('bg-success');
+            progressBar.classList.add('bg-primary');
+            progressContainer.style.display = 'block';
+            actualizarBarra(5, 'Consultando base de datos y generando gráficos...');
+
+            // Avanzar progresivamente hasta 95% mientras el servidor construye el reporte
+            intervaloProgreso = setInterval(() => {
+                if (progreso < 40) {
+                actualizarBarra(progreso + 5, 'Consultando base de datos...');
+                } else if (progreso < 75) {
+                actualizarBarra(progreso + 3, 'Generando gráficos y matrices estadísticas...');
+                } else if (progreso < 95) {
+                actualizarBarra(progreso + 1, 'Compilando documento final (esto puede tomar unos segundos)...');
+                } else {
+                // Si tarda más de lo normal, alterna un mensaje tranquilizador en el 95%
+                actualizarBarra(95, 'Finalizando renderizado del archivo, por favor espere...');
+                }
+            }, 800);
+
+            // 3. Petición al servidor (con tiempo máximo de espera)
+            const controlador = new AbortController();
+            temporizadorEspera = setTimeout(() => controlador.abort(), TIEMPO_MAX_EXPORTACION_MS);
+
+            const response = await fetch(url, { signal: controlador.signal });
+            if (!response.ok) {
+                // El backend devuelve el detalle en texto plano; se muestra tal cual.
+                let detalle = '';
+                try {
+                    const cuerpo = await response.text();
+                    try {
+                        const json = JSON.parse(cuerpo);
+                        detalle = (json && (json.error || json.mensaje)) || cuerpo;
+                    } catch (e) {
+                        detalle = cuerpo;
+                    }
+                } catch (e) { /* respuesta sin cuerpo */ }
+
+                if (response.status === 401) {
+                    throw new Error('La sesión expiró. Vuelva a iniciar sesión para exportar.');
+                }
+                detalle = (detalle || '').trim();
+                throw new Error(detalle
+                    ? `El servidor devolvió un error (${response.status}): ${detalle}`
+                    : `El servidor devolvió un error (${response.status}) al generar el archivo.`);
+            }
+
+            const blob = await response.blob();
+
+            // 4. Completar al 100%
+            clearInterval(intervaloProgreso);
+            progressBar.classList.remove('bg-primary');
+            progressBar.classList.add('bg-success');
+            actualizarBarra(100, '¡Reporte listo! Iniciando descarga...');
+
+            // Descargar archivo
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `reporte_${tipo}_${Date.now()}.${formato === 'excel' ? 'xlsx' : formato}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+
+            // Esperar 1.2 segundos para que el usuario vea el 100% en verde antes de limpiar
+            await new Promise(resolve => setTimeout(resolve, 1200));
+
+            } catch (error) {
+            const esTiempoAgotado = error && error.name === 'AbortError';
+            if (esTiempoAgotado) {
+                mostrarErrorExportacion(
+                    `La generación superó el tiempo de espera (${Math.round(TIEMPO_MAX_EXPORTACION_MS / 1000)} s). ` +
+                    'Reintente o elija otro reporte.');
+            } else {
+                mostrarErrorExportacion(error && error.message
+                    ? error.message
+                    : 'Ocurrió un error al generar el archivo. Por favor reintente.');
+            }
+            console.error(error);
+            } finally {
+            // 5. Restaurar modal a su estado original para permitir reintentar
+            clearInterval(intervaloProgreso);
+            clearTimeout(temporizadorEspera);
+            btn.innerHTML = originalText;
+            btns.forEach(b => b.disabled = false);
+            selectTipo.disabled = false;
+            if (btnClose) btnClose.style.display = 'block';
+            progressContainer.style.display = 'none';
+            progressBar.classList.remove('bg-success');
+            progressBar.classList.add('bg-primary');
+            actualizarBarra(0, '');
+            }
+        }
       async function cerrarSesion() {
             await fetch('/api/logout', { method: 'POST' });
             window.location.href = '/index.html';
