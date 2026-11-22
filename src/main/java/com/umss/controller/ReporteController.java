@@ -2,6 +2,7 @@ package com.umss.controller;
 
 import com.umss.dao.EncuestaDAO;
 import io.javalin.http.Context;
+import com.umss.model.ConteoPalabra;
 import com.umss.model.ConteoRespuesta;
 import com.umss.model.IndicadorEscala;
 import java.util.ArrayList;
@@ -9,15 +10,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.umss.util.CalculadoraEmprendimiento;
-import com.umss.model.AreaEmpleabilidad;
+import com.umss.util.CalculadoraDesempleo;
 import com.umss.model.AreaInteresPosgrado;
-import com.umss.model.ResultadoChi2;
-
 public class ReporteController {
 
     public static void reporteEmprendimiento(Context ctx) {
         try {
-            ctx.json(EncuestaDAO.obtenerConteoEmprendimiento());
+            ctx.json(CalculadoraEmprendimiento.analisisExploratorio(
+                    EncuestaDAO.obtenerRegistrosEmprendimiento()));
         } catch (Exception e) {
             e.printStackTrace();
             ctx.status(500).result("Error al generar reporte: " + e.getMessage());
@@ -25,12 +25,13 @@ public class ReporteController {
     }
 
     /**
-     * Resumen del reporte de emprendimiento calculado en el servidor
-     * (mismas fórmulas que usan el CSV, el Excel y el PDF).
+     * Mismo análisis exploratorio que el reporte principal. Se conserva el
+     * endpoint para clientes antiguos que todavía lo consultan.
      */
     public static void reporteEmprendimientoResumen(Context ctx) {
         try {
-            ctx.json(CalculadoraEmprendimiento.resumen(EncuestaDAO.obtenerConteoEmprendimiento()));
+            ctx.json(CalculadoraEmprendimiento.analisisExploratorio(
+                    EncuestaDAO.obtenerRegistrosEmprendimiento()));
         } catch (Exception e) {
             e.printStackTrace();
             ctx.status(500).result("Error al generar el resumen: " + e.getMessage());
@@ -61,32 +62,26 @@ public class ReporteController {
 
     public static void reporteDesempleo(Context ctx) {
         try {
-            Map<String, Object> r = new LinkedHashMap<>();
+            List<ConteoPalabra> tendencias = EncuestaDAO.contarPalabrasClave(59);
+            List<ConteoPalabra> herramientas = EncuestaDAO.contarPalabrasClave(60);
+            List<ConteoPalabra> competencias = EncuestaDAO.contarPalabrasClave(61);
 
-            int[] pob = EncuestaDAO.contarPoblacionObjetivo();
-            r.put("totalTitulados", pob[0]);
-            r.put("noTrabaja", pob[1]);
-            r.put("conTiempoDesempleo", pob[2]);
-            r.put("poblacionObjetivo", pob[3]);
+            List<CalculadoraDesempleo.DemandaEmpleador> demandas = List.of(
+                    new CalculadoraDesempleo.DemandaEmpleador(
+                            "Tendencias emergentes",
+                            EncuestaDAO.obtenerRespuestasTexto(59).size(),
+                            tendencias),
+                    new CalculadoraDesempleo.DemandaEmpleador(
+                            "Herramientas tecnológicas",
+                            EncuestaDAO.obtenerRespuestasTexto(60).size(),
+                            herramientas),
+                    new CalculadoraDesempleo.DemandaEmpleador(
+                            "Competencias fundamentales",
+                            EncuestaDAO.obtenerRespuestasTexto(61).size(),
+                            competencias));
 
-            List<ConteoRespuesta> situacion = EncuestaDAO.contarRespuestas(14);
-            situacion.sort((a, b) -> Integer.compare(ordenSituacion(a.getRespuesta()), ordenSituacion(b.getRespuesta())));
-            r.put("situacionActual", situacion);
-            r.put("tiempoDesempleo", EncuestaDAO.contarRespuestas(13));
-            r.put("razones", EncuestaDAO.contarRespuestas(28));
-
-            r.put("matrizBarreras", EncuestaDAO.obtenerCruce(28, 29));
-            r.put("matrizInsercion", EncuestaDAO.obtenerCruce(36, 37));
-
-            // Demandas del empleador (conteo de palabras clave en texto abierto)
-            r.put("tendenciasEmpleador", EncuestaDAO.contarPalabrasClave(59));
-            r.put("herramientasEmpleador", EncuestaDAO.contarPalabrasClave(60));
-            r.put("competenciasEmpleador", EncuestaDAO.contarPalabrasClave(61));
-            r.put("respuestasTendencias", EncuestaDAO.obtenerRespuestasTexto(59));
-            r.put("respuestasHerramientas", EncuestaDAO.obtenerRespuestasTexto(60));
-            r.put("respuestasCompetencias", EncuestaDAO.obtenerRespuestasTexto(61));
-
-            ctx.json(r);
+            ctx.json(CalculadoraDesempleo.analisis(
+                    EncuestaDAO.obtenerRegistrosDesempleo(), demandas));
         } catch (Exception e) {
             e.printStackTrace();
             ctx.status(500).result("Error al generar reporte de desempleo: " + e.getMessage());

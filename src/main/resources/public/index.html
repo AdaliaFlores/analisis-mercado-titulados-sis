@@ -64,8 +64,9 @@
                 <form id="formEncuesta">
                     <div id="bloqueCorreo" class="card bg-white border mb-4 shadow-sm d-none">
                         <div class="card-body">
-                            <label class="form-label fw-bold">Correo *</label>
-                            <input type="email" id="contactoUsuario" class="form-control" placeholder="Tu dirección de correo electrónico">
+                            <label class="form-label fw-bold">Correo <span class="text-danger">*</span></label>
+                            <div id="msg_error_correo" class="text-danger small mb-2 fw-semibold d-none">Esta pregunta es obligatoria.</div>
+                            <input type="text" id="contactoUsuario" class="form-control" placeholder="Tu dirección de correo electrónico" oninput="validarCorreoTiempoReal(this)">
                         </div>
                     </div>
 
@@ -116,17 +117,17 @@
 
             if (encuestaActualId === 2) {
                 bloqueCorreo.classList.remove('d-none');
-                inputCorreo.required = true;
+                document.getElementById('msg_error_correo').classList.add('d-none');
             } else {
                 bloqueCorreo.classList.add('d-none');
-                inputCorreo.required = false;
                 inputCorreo.value = '';
             }
 
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = 'Enviar Respuestas';
             btnEnviar.classList.add('d-none');
             contenedor.classList.remove('d-none');
             lista.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Cargando preguntas...</p></div>';
-
             fetch(`/api/encuestas/${id}/preguntas`)
                 .then(res => res.json())
                 .then(preguntas => {
@@ -211,7 +212,7 @@
                             const esPregunta5 = p.textoPregunta.includes("Indique 5 asignaturas");
 
                             if (esPregunta5) {
-                                htmlPregunta += `<div id="msg_limite_${p.id}" class="text-danger small mb-2 fw-semibold">Seleccione al menos 5 opciones.</div>`;
+                                htmlPregunta += `<div id="msg_limite_${p.id}" class="text-danger small mb-2 fw-semibold">Seleccione exactamente 5 opciones.</div>`;
                             }
 
                             opciones.forEach((op, idx) => {
@@ -230,7 +231,7 @@
                                     <div class="form-check mb-2">
                                         <input class="form-check-input" type="checkbox" name="p_${p.id}" value="${op}" onchange="${fnChange}">
                                         <label class="form-check-label">${op}</label>
-                                        ${esOtro ? `<input type="text" id="${inputOtroId}" name="p_${p.id}_otro" class="form-control form-control-sm mt-1 d-none" placeholder="Especifique cuál...">` : ''}
+                                        ${esOtro ? `<input type="text" id="${inputOtroId}" name="p_${p.id}_otro" maxlength="100" oninput="filtrarCaracteresEspecialesInput(this)" class="form-control form-control-sm mt-1 d-none" placeholder="Especifique cuál...">` : ''}
                                     </div>`;
                             });
                         } 
@@ -254,18 +255,40 @@
                                         <div class="form-check mb-2">
                                             <input class="form-check-input" type="radio" name="p_${p.id}" value="${op}" onchange="limpiarErrorObligatorio(${p.id}); evaluarCondicionales(${p.id}, '${op.replace(/'/g, "\\'")}'); toggleInputOtroRadio('${inputOtroId}', ${esOtro})">
                                             <label class="form-check-label">${op}</label>
-                                            ${(esOtro && idx === opciones.length - 1) ? `<input type="text" id="${inputOtroId}" name="p_${p.id}_otro" class="form-control form-control-sm mt-1 d-none" placeholder="Especifique cuál...">` : ''}
+                                            ${(esOtro && idx === opciones.length - 1) ? `<input type="text" id="${inputOtroId}" name="p_${p.id}_otro" maxlength="100" oninput="filtrarCaracteresEspecialesInput(this)" class="form-control form-control-sm mt-1 d-none" placeholder="Especifique cuál...">` : ''}
                                         </div>`;
                                 });
                             }
                         } 
-                        // 4. CAMPOS LIBRES (EMAIL / TEXTAREA)
+                        // 4. CAMPOS LIBRES (EMAIL / TELÉFONO / TEXTAREA CON LÍMITE Y FILTRO DE CARACTERES)
                         else {
                             const textoLower = p.textoPregunta.toLowerCase();
                             if (textoLower.includes("email") || textoLower.includes("correo")) {
-                                htmlPregunta += `<input type="email" class="form-control mt-2" name="p_${p.id}" placeholder="ejemplo@dominio.com" oninput="limpiarErrorObligatorio(${p.id})">`;
+                                htmlPregunta += `<input type="text" data-tipo="email" class="form-control mt-2" name="p_${p.id}" placeholder="ejemplo@dominio.com" oninput="validarCorreoPregunta(this, ${p.id})">`;
+                            } else if (textoLower.includes("teléfono") || textoLower.includes("telefono") || textoLower.includes("telefónico") || textoLower.includes("telefonico") || textoLower.includes("celular")) {
+                                htmlPregunta += `
+                                    <input type="text" data-tipo="telefono" class="form-control mt-2" name="p_${p.id}" maxlength="15" inputmode="numeric" pattern="[0-9]*" placeholder="Ej: 70012345" oninput="validarTelefono(this, ${p.id})">
+                                    <small id="msg_telefono_${p.id}" class="text-danger fw-semibold d-none mt-1 d-block">Solo se permiten números.</small>`;
                             } else {
-                                htmlPregunta += `<textarea class="form-control mt-2" name="p_${p.id}" rows="2" placeholder="Escriba su respuesta..." oninput="limpiarErrorObligatorio(${p.id})"></textarea>`;
+                                const esPreguntaExtensaEmpleador = (encuestaActualId === 2) && (
+                                    textoLower.includes("nuevas áreas de conocimiento") ||
+                                    textoLower.includes("nuevas herramientas tecnológicas") ||
+                                    textoLower.includes("habilidades, competencias y destrezas")
+                                );
+                                // Los enlaces (LinkedIn) sí necesitan "/", ":" y "@".
+                                const esEnlace = textoLower.includes("linkedin")
+                                    || textoLower.includes("link de")
+                                    || textoLower.includes("url")
+                                    || textoLower.includes("sitio web");
+                                const maxCaracteres = esEnlace ? 200
+                                    : (esPreguntaExtensaEmpleador ? 250 : 100);
+
+                                htmlPregunta += `
+                                    <textarea class="form-control mt-2" name="p_${p.id}" rows="2" maxlength="${maxCaracteres}" data-tipo="${esEnlace ? 'enlace' : 'texto'}" placeholder="Escriba su respuesta..." oninput="validarTextoAbierto(this, ${p.id}, ${maxCaracteres}, ${esEnlace})"></textarea>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <small id="msg_caracteres_${p.id}" class="text-danger fw-semibold d-none">No se permiten caracteres especiales (ej. #, $, %, &, /, etc.).</small>
+                                        <small id="contador_${p.id}" class="text-muted ms-auto">0 / ${maxCaracteres}</small>
+                                    </div>`;
                             }
                         }
 
@@ -290,7 +313,95 @@
         function limpiarErrorObligatorio(preguntaId) {
             const msgError = document.getElementById(`msg_error_${preguntaId}`);
             if (msgError) {
+                msgError.innerText = 'Esta pregunta es obligatoria.';
                 msgError.classList.add('d-none');
+            }
+        }
+
+        function validarCorreoTiempoReal(input) {
+            const msgError = document.getElementById('msg_error_correo');
+            if (!msgError) return;
+
+            const valor = input.value.trim();
+            const regexEmail = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+            if (valor === '') {
+                msgError.innerText = 'Esta pregunta es obligatoria.';
+                msgError.classList.remove('d-none');
+            } else if (!regexEmail.test(valor)) {
+                msgError.innerText = 'Ingrese un correo electrónico válido (ejemplo: usuario@dominio.com).';
+                msgError.classList.remove('d-none');
+            } else {
+                msgError.classList.add('d-none');
+            }
+        }
+
+        function validarCorreoPregunta(input, preguntaId) {
+            const msgError = document.getElementById(`msg_error_${preguntaId}`);
+            if (!msgError) return;
+
+            const valor = input.value.trim();
+            const regexEmail = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+            if (valor === '') {
+                msgError.innerText = 'Esta pregunta es obligatoria.';
+                msgError.classList.remove('d-none');
+            } else if (!regexEmail.test(valor)) {
+                msgError.innerText = 'Ingrese un correo electrónico válido (ejemplo: usuario@dominio.com).';
+                msgError.classList.remove('d-none');
+            } else {
+                msgError.classList.add('d-none');
+            }
+        }
+
+        function validarTelefono(input, preguntaId) {
+            limpiarErrorObligatorio(preguntaId);
+            const msgTel = document.getElementById(`msg_telefono_${preguntaId}`);
+
+            // Elimina todo lo que no sea número (0-9)
+            if (/[^0-9]/.test(input.value)) {
+                input.value = input.value.replace(/[^0-9]/g, '');
+                if (msgTel) {
+                    msgTel.classList.remove('d-none');
+                    clearTimeout(input.timerTel);
+                    input.timerTel = setTimeout(() => {
+                        msgTel.classList.add('d-none');
+                    }, 2500);
+                }
+            }
+        }
+
+        function validarTextoAbierto(textarea, preguntaId, maxCaracteres, esEnlace = false) {
+            limpiarErrorObligatorio(preguntaId);
+
+            // Permite letras (con tildes, ñ, ü), números, espacios, saltos de línea
+            // y puntuación básica. Los enlaces permiten además "/", ":", "@", etc.
+            const regexNoPermitidos = esEnlace
+                ? /[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s.,;:()¿?¡!\-\/@_%+&=#~]/g
+                : /[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s.,;:()¿?¡!\-]/g;
+            const msgEspeciales = document.getElementById(`msg_caracteres_${preguntaId}`);
+
+            if (regexNoPermitidos.test(textarea.value)) {
+                textarea.value = textarea.value.replace(regexNoPermitidos, '');
+                if (msgEspeciales) {
+                    msgEspeciales.classList.remove('d-none');
+                    clearTimeout(textarea.timerAviso);
+                    textarea.timerAviso = setTimeout(() => {
+                        msgEspeciales.classList.add('d-none');
+                    }, 2500);
+                }
+            }
+
+            const contador = document.getElementById(`contador_${preguntaId}`);
+            if (contador) {
+                contador.innerText = `${textarea.value.length} / ${maxCaracteres}`;
+            }
+        }
+
+        function filtrarCaracteresEspecialesInput(input) {
+            const regexNoPermitidos = /[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s.,;:()¿?¡!\-]/g;
+            if (regexNoPermitidos.test(input.value)) {
+                input.value = input.value.replace(regexNoPermitidos, '');
             }
         }
 
@@ -316,6 +427,54 @@
                 input.classList.add('d-none');
                 input.value = '';
             }
+        }
+
+        function esOpcionOtro(valor) {
+            const normalizado = (valor || '').trim().toLowerCase();
+            return normalizado === 'otro' || normalizado === 'otros'
+                || normalizado === 'otra' || normalizado === 'otras';
+        }
+
+        function esOpcionOtroConTexto(valor) {
+            const normalizado = (valor || '').trim().toLowerCase();
+            return normalizado.startsWith('otro') || normalizado.startsWith('otr@');
+        }
+
+        // La opción "Otro" sólo es válida si el campo dinámico tiene contenido.
+        function validarCamposOtro() {
+            const controles = document.querySelectorAll(
+                '#listaPreguntas input[type="checkbox"], #listaPreguntas input[type="radio"]'
+            );
+
+            for (const control of controles) {
+                if (!control.checked || control.closest('.d-none')) continue;
+                if (!esOpcionOtro(control.value)) continue;
+
+                const contenedor = control.closest('.form-check');
+                const inputOtro = contenedor
+                    ? contenedor.querySelector(`input[name="${control.name}_otro"]`)
+                    : null;
+
+                if (!inputOtro || inputOtro.closest('.d-none')) continue;
+
+                if (inputOtro.value.trim() === '') {
+                    const pregId = control.name.replace('p_', '');
+                    const msgError = document.getElementById(`msg_error_${pregId}`);
+                    if (msgError) {
+                        msgError.innerText = 'Especifique la opción "Otro".';
+                        msgError.classList.remove('d-none');
+                    }
+                    inputOtro.focus();
+                    inputOtro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    mostrarNotificacion(
+                        'Atención',
+                        'Por favor especifique la opción "Otro" antes de enviar.',
+                        false
+                    );
+                    return false;
+                }
+            }
+            return true;
         }
 
         // BLOQUES CONDICIONALES TITULADOS (IDs Reales de BD)
@@ -424,16 +583,24 @@
         }
 
         function validarSeleccion5(preguntaId) {
-            const checkboxes = document.querySelectorAll(`input[name="p_${preguntaId}"]:checked`);
+            const todosLosCheckboxes = document.querySelectorAll(`input[name="p_${preguntaId}"]`);
+            const seleccionados = document.querySelectorAll(`input[name="p_${preguntaId}"]:checked`);
             const msg = document.getElementById(`msg_limite_${preguntaId}`);
+
+            const bloquearRestantes = seleccionados.length >= 5;
+            todosLosCheckboxes.forEach(cb => {
+                if (!cb.checked) {
+                    cb.disabled = bloquearRestantes;
+                }
+            });
 
             if (!msg) return;
 
-            if (checkboxes.length >= 5) {
+            if (seleccionados.length === 5) {
                 msg.classList.add('d-none');
             } else {
                 msg.classList.remove('d-none');
-                msg.innerText = 'Seleccione al menos 5 opciones.';
+                msg.innerText = 'Debe seleccionar exactamente 5 opciones.';
             }
         }
 
@@ -444,6 +611,32 @@
             let primeraFaltante = null;
             let hayErrores = false;
 
+            // VALIDACIÓN DEL CAMPO CORREO EN ENCUESTA DE EMPLEADORES
+            if (encuestaActualId === 2) {
+                const inputCorreo = document.getElementById('contactoUsuario');
+                const msgCorreo = document.getElementById('msg_error_correo');
+                const valorCorreo = inputCorreo.value.trim();
+                const regexEmail = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+                if (valorCorreo === '') {
+                    hayErrores = true;
+                    if (msgCorreo) {
+                        msgCorreo.innerText = 'Esta pregunta es obligatoria.';
+                        msgCorreo.classList.remove('d-none');
+                    }
+                    primeraFaltante = document.getElementById('bloqueCorreo');
+                } else if (!regexEmail.test(valorCorreo)) {
+                    hayErrores = true;
+                    if (msgCorreo) {
+                        msgCorreo.innerText = 'Ingrese un correo electrónico válido (ejemplo: usuario@dominio.com).';
+                        msgCorreo.classList.remove('d-none');
+                    }
+                    primeraFaltante = document.getElementById('bloqueCorreo');
+                } else if (msgCorreo) {
+                    msgCorreo.classList.add('d-none');
+                }
+            }
+
             const tarjetas = document.querySelectorAll('#listaPreguntas .card');
             tarjetas.forEach(card => {
                 if (card.classList.contains('d-none') || card.closest('.d-none')) return;
@@ -452,8 +645,8 @@
                 if (!idDiv.startsWith('bloque_pregunta_')) return;
 
                 const pregId = idDiv.replace('bloque_pregunta_', '');
-                const inputsRadioCheck = card.querySelectorAll(`input[name="p_${pregId}"]`);
-                const inputTexto = card.querySelector(`textarea[name="p_${pregId}"], input[name="p_${pregId}"], select[name="p_${pregId}"]`);
+                const inputsRadioCheck = card.querySelectorAll(`input[type="radio"][name="p_${pregId}"], input[type="checkbox"][name="p_${pregId}"]`);
+                const inputTexto = card.querySelector(`textarea[name="p_${pregId}"], input[type="text"][name="p_${pregId}"], input[type="email"][name="p_${pregId}"], select[name="p_${pregId}"]`);
                 const msgError = document.getElementById(`msg_error_${pregId}`);
 
                 let respondida = false;
@@ -466,7 +659,10 @@
 
                 if (!respondida) {
                     hayErrores = true;
-                    if (msgError) msgError.classList.remove('d-none');
+                    if (msgError) {
+                        msgError.innerText = 'Esta pregunta es obligatoria.';
+                        msgError.classList.remove('d-none');
+                    }
                     if (!primeraFaltante) primeraFaltante = card;
                 } else {
                     if (msgError) msgError.classList.add('d-none');
@@ -485,7 +681,10 @@
 
                 if (!respondida) {
                     hayErrores = true;
-                    if (msgError) msgError.classList.remove('d-none');
+                    if (msgError) {
+                        msgError.innerText = 'Esta pregunta es obligatoria.';
+                        msgError.classList.remove('d-none');
+                    }
                     if (!primeraFaltante) primeraFaltante = tr;
                 } else {
                     if (msgError) msgError.classList.add('d-none');
@@ -500,7 +699,49 @@
                 return; 
             }
 
-            // 2. VALIDACIÓN DINÁMICA DE AL MENOS 5 ASIGNATURAS
+            // Validar formato de correo en preguntas de tipo email antes de continuar
+            const inputsEmail = document.querySelectorAll('#listaPreguntas input[data-tipo="email"]');
+            const regexEmailCheck = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+            for (let inp of inputsEmail) {
+                if (inp.closest('.d-none')) continue;
+                if (!regexEmailCheck.test(inp.value.trim())) {
+                    const pregId = inp.name.replace('p_', '');
+                    const msgErr = document.getElementById(`msg_error_${pregId}`);
+                    if (msgErr) {
+                        msgErr.innerText = 'Ingrese un correo electrónico válido (ejemplo: usuario@dominio.com).';
+                        msgErr.classList.remove('d-none');
+                    }
+                    mostrarNotificacion('Atención', 'Por favor ingrese una dirección de correo electrónico válida.', false);
+                    inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    inp.focus();
+                    return;
+                }
+            }
+
+            // Validar que los teléfonos solo contengan números.
+            const inputsTelefono = document.querySelectorAll('#listaPreguntas input[data-tipo="telefono"]');
+            for (let inp of inputsTelefono) {
+                if (inp.closest('.d-none')) continue;
+                if (!/^[0-9]{6,15}$/.test(inp.value.trim())) {
+                    const pregId = inp.name.replace('p_', '');
+                    const msgTel = document.getElementById(`msg_telefono_${pregId}`);
+                    if (msgTel) {
+                        msgTel.innerText = 'Ingrese un teléfono válido (solo números, 6 a 15 dígitos).';
+                        msgTel.classList.remove('d-none');
+                    }
+                    mostrarNotificacion('Atención', 'Por favor ingrese un número de teléfono válido.', false);
+                    inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    inp.focus();
+                    return;
+                }
+            }
+
+            // La opción "Otro" debe tener su texto en el campo dinámico.
+            if (!validarCamposOtro()) {
+                return;
+            }
+
+            // 2. VALIDACIÓN DINÁMICA DE EXACTAMENTE 5 ASIGNATURAS
             if (encuestaActualId === 1) {
                 const tarjetas = document.querySelectorAll('#listaPreguntas .card');
                 for (let card of tarjetas) {
@@ -511,8 +752,8 @@
                         const pregId = card.id.replace('bloque_pregunta_', '');
                         const seleccionados = card.querySelectorAll(`input[name="p_${pregId}"]:checked`);
                         
-                        if (seleccionados.length < 5) {
-                            mostrarNotificacion('Atención', 'Debe seleccionar al menos 5 opciones en las preguntas de asignaturas.', false);
+                        if (seleccionados.length !== 5) {
+                            mostrarNotificacion('Atención', 'Debe seleccionar exactamente 5 opciones en las preguntas de asignaturas.', false);
                             card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             return; 
                         }
@@ -520,66 +761,102 @@
                 }
             }
 
-            // 3. PROCESO DE ENVÍO
+           // 3. PROCESO DE ENVÍO
             const encuestaId = document.getElementById('selectEncuestas').value;
-            const contacto = document.getElementById('contactoUsuario').value;
+            const contacto = document.getElementById('contactoUsuario').value.trim();
             const formData = new FormData(this);
-
-            const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            for (let [key, val] of formData.entries()) {
-                if (key.startsWith('p_')) {
-                    const elemento = document.querySelector(`[name="${key}"]`);
-                    if (elemento && elemento.type === 'email' && val.trim() !== '') {
-                        if (!regexEmail.test(val.trim())) {
-                            mostrarNotificacion('Atención', 'Por favor ingrese una dirección de correo electrónico válida (ejemplo: usuario@correo.com).', false);
-                            elemento.focus();
-                            return; 
-                        }
-                    }
-                }
-            }
 
             const respuestas = {};
             let nombre = contacto;
-            
+
+            // Se procesa una sola vez por pregunta para no mezclar los valores
+            // de las opciones marcadas con el texto de "Otro".
+            const clavesPregunta = new Set();
             formData.forEach((value, key) => {
                 if (key.startsWith('p_') && !key.endsWith('_otro')) {
-                    const inputOtro = document.querySelector(`[name="${key}_otro"]`);
-                    let valorFinal = value;
-
-                    if (inputOtro && !inputOtro.classList.contains('d-none') && inputOtro.value.trim() !== '') {
-                        valorFinal += `: ${inputOtro.value.trim()}`;
-                    }
-
-                    if (respuestas[key]) {
-                        respuestas[key] += `, ${valorFinal}`;
-                    } else {
-                        respuestas[key] = valorFinal;
-                    }
-
-                    if (key === 'p_50' || key === 'p_15' || key === 'p_1') {
-                        nombre = value;
-                    }
+                    clavesPregunta.add(key);
                 }
             });
+
+            clavesPregunta.forEach(key => {
+                const controles = Array.from(document.getElementsByName(key))
+                    .filter(control => !control.closest('.d-none'));
+                if (controles.length === 0) return;
+
+                const esSeleccion = controles.some(
+                    control => control.type === 'radio' || control.type === 'checkbox'
+                );
+
+                let valorFinal = '';
+
+                if (esSeleccion) {
+                    valorFinal = controles
+                        .filter(control => control.checked)
+                        .map(control => {
+                            const valor = control.value;
+                            if (!esOpcionOtroConTexto(valor)) return valor;
+
+                            const contenedor = control.closest('.form-check');
+                            const inputOtro = contenedor
+                                ? contenedor.querySelector(`input[name="${key}_otro"]`)
+                                : null;
+                            const textoOtro = inputOtro && !inputOtro.closest('.d-none')
+                                ? inputOtro.value.trim()
+                                : '';
+
+                            return textoOtro !== '' ? `${valor}: ${textoOtro}` : valor;
+                        })
+                        .join(', ');
+                } else {
+                    valorFinal = (controles[0].value || '').trim();
+                }
+
+                if (valorFinal === '') return;
+
+                respuestas[key] = valorFinal;
+
+                if (key === 'p_50' || key === 'p_15' || key === 'p_1') {
+                    nombre = valorFinal;
+                }
+            });
+
+            // --- AQUÍ VA EL BLOQUEO DEL BOTÓN ---
+            const btnEnviar = document.getElementById('btnEnviar');
+            if (btnEnviar.disabled) return;
+
+            btnEnviar.disabled = true;
+            btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Enviando...';
+            // ------------------------------------
 
             fetch('/api/respuestas', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ encuestaId: parseInt(encuestaId), nombre, contacto, respuestas })
             })
-            .then(res => {
+            .then(async res => {
                 if (res.ok) {
                     mostrarNotificacion('¡Registro Exitoso!', 'Tus respuestas han sido guardadas correctamente.', true);
                     document.getElementById('formEncuesta').reset();
                     document.getElementById('contenedorEncuesta').classList.add('d-none');
                     document.getElementById('selectEncuestas').value = "";
                 } else {
-                    mostrarNotificacion('Error', 'Ocurrió un error al enviar las respuestas.', false);
+                    let mensaje = 'Ocurrió un error al enviar las respuestas.';
+                    try {
+                        const detalle = (await res.text()).trim();
+                        if (detalle) mensaje = detalle;
+                    } catch (e) {
+                        // Se conserva el mensaje genérico.
+                    }
+                    mostrarNotificacion('Error', mensaje, false);
                 }
             })
             .catch(() => {
                 mostrarNotificacion('Error de Conexión', 'No se pudo conectar con el servidor.', false);
+            })
+            .finally(() => {
+                // --- AQUÍ SE VUELVE A HABILITAR AL TERMINAR ---
+                btnEnviar.disabled = false;
+                btnEnviar.innerHTML = 'Enviar Respuestas';
             });
         });
     </script>
