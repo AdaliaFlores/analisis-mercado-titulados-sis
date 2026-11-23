@@ -19,8 +19,7 @@ public class ReporteController {
             ctx.json(CalculadoraEmprendimiento.analisisExploratorio(
                     EncuestaDAO.obtenerRegistrosEmprendimiento()));
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error al generar reporte: " + e.getMessage());
+            RespuestaError.responder(ctx, "el reporte de emprendimiento", e);
         }
     }
 
@@ -41,8 +40,7 @@ public class ReporteController {
                 ctx.json(EncuestaDAO.obtenerCruce(x, y));
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error en el cruce: " + e.getMessage());
+            RespuestaError.responder(ctx, "el cruce de variables", e);
         }
     }
 
@@ -69,8 +67,7 @@ public class ReporteController {
             ctx.json(CalculadoraDesempleo.analisis(
                     EncuestaDAO.obtenerRegistrosDesempleo(), demandas));
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error al generar reporte de desempleo: " + e.getMessage());
+            RespuestaError.responder(ctx, "el reporte de desempleo", e);
         }
     }
 
@@ -106,8 +103,7 @@ public class ReporteController {
 
             ctx.json(r);
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error al generar reporte de brechas: " + e.getMessage());
+            RespuestaError.responder(ctx, "el reporte de brechas", e);
         }
     }
 
@@ -136,8 +132,7 @@ public class ReporteController {
             r.put("estadisticosAntiguedad", EncuestaDAO.estadisticosAntiguedad(12));
             ctx.json(r);
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error al generar reporte de empleabilidad: " + e.getMessage());
+            RespuestaError.responder(ctx, "el reporte de empleabilidad", e);
         }
     }
 
@@ -158,8 +153,7 @@ public class ReporteController {
 
             ctx.json(r);
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).result("Error al generar reporte de formación y financiamiento: " + e.getMessage());
+            RespuestaError.responder(ctx, "el reporte de formación y financiamiento", e);
         }
     }
 

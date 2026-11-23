@@ -44,10 +44,7 @@ public class ReporteHu12Controller {
                     java.util.Map.of("error",
                             "Los parámetros encuesta y pregunta deben ser números"));
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).json(
-                    java.util.Map.of("error",
-                            "No se pudieron obtener las frecuencias"));
+            RespuestaError.responder(ctx, "las frecuencias de la HU12", e);
         }
     }
 
@@ -55,10 +52,7 @@ public class ReporteHu12Controller {
         try {
             ctx.json(ReporteHu12DAO.obteneralumno());
         } catch (Exception e) {
-            e.printStackTrace();
-            ctx.status(500).json(
-                    java.util.Map.of("error",
-                            "No se pudo generar el reporte alumno"));
+            RespuestaError.responder(ctx, "la red de alumnos (HU12)", e);
         }
     }
 }

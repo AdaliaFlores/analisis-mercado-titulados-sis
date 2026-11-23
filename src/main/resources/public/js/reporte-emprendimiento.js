@@ -1,18 +1,24 @@
+let cargandoEmprendimiento = false;
+
 async function cargarReporteEmprendimiento() {
+  if (cargandoEmprendimiento) return;
+
   const cont = document.getElementById('contenedorGraficos');
-  cont.innerHTML = `
-    <div class="col-12 text-center py-5">
-      <div class="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
-      <p class="text-muted mb-0">Cargando ecosistema de emprendimiento...</p>
-    </div>`;
+  if (!cont) return;
+
+  cargandoEmprendimiento = true;
+  ReporteCarga.mostrarCargando(cont, 'Cargando datos del ecosistema de emprendimiento...', 'primary');
   try {
-    const res = await fetch('/api/reportes/emprendimiento');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const datos = await res.json();
+    const datos = await ReporteCarga.solicitarJson('/api/reportes/emprendimiento');
     cont.innerHTML = '';
     renderReporteEmprendimiento(datos);
   } catch (e) {
-    cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte.</p>';
+    ReporteCarga.mostrarError(cont, {
+      error: e,
+      alReintentar: cargarReporteEmprendimiento
+    });
+  } finally {
+    cargandoEmprendimiento = false;
   }
 }
 

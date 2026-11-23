@@ -19,16 +19,14 @@
 
     cargandoFormacion = true;
     destruirGraficos();
-    cont.innerHTML = `
-      <div class="col-12 text-center py-5">
-        <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
-        <p class="text-muted mb-0">Cargando análisis de formación continua y financiamiento...</p>
-      </div>`;
+    ReporteCarga.mostrarCargando(
+      cont,
+      'Cargando datos del reporte de formación continua y financiamiento...',
+      'info'
+    );
 
     try {
-      const res = await fetch('/api/reportes/formacion-financiamiento');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const d = await res.json();
+      const d = await ReporteCarga.solicitarJson('/api/reportes/formacion-financiamiento');
 
       cont.innerHTML = '';
 
@@ -48,7 +46,10 @@
       renderResumen(cont, d);
     } catch (e) {
       destruirGraficos();
-      cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte: ' + escapar(e.message) + '</p>';
+      ReporteCarga.mostrarError(cont, {
+        error: e,
+        alReintentar: window.cargarReporteFormacion
+      });
     } finally {
       cargandoFormacion = false;
     }

@@ -5,25 +5,34 @@
                    '#0dcaf0', '#fd7e14', '#20c997', '#6610f2', '#d63384'];
 
   let charts = [];
+  let cargandoBrechas = false;
 
   window.cargarReporteBrechas = async function () {
+    if (cargandoBrechas) return;
+
     const cont = document.getElementById('contenedorBrechas');
-    cont.innerHTML = `
-      <div class="col-12 text-center py-5">
-        <div class="spinner-border text-warning mb-3" role="status" aria-hidden="true"></div>
-        <p class="text-muted mb-0">Cargando evaluación de brechas y competencias...</p>
-      </div>`;
+    if (!cont) return;
+
+    cargandoBrechas = true;
+    ReporteCarga.mostrarCargando(
+      cont,
+      'Cargando datos de brechas y competencias...',
+      'warning'
+    );
     charts.forEach(c => { try { c.destroy(); } catch (e) {} });
     charts = [];
 
     let d;
     try {
-      const res = await fetch('/api/reportes/brechas');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      d = await res.json();
+      d = await ReporteCarga.solicitarJson('/api/reportes/brechas');
     } catch (e) {
-      cont.innerHTML = '<p class="text-danger">No se pudo cargar el reporte: ' + e.message + '</p>';
+      ReporteCarga.mostrarError(cont, {
+        error: e,
+        alReintentar: window.cargarReporteBrechas
+      });
       return;
+    } finally {
+      cargandoBrechas = false;
     }
 
     cont.innerHTML = '';

@@ -14,6 +14,7 @@
   const graficos = {};
   let version = 0;          // evita que una respuesta lenta pise a una más reciente
   let filtrosListos = false;
+  let cargandoUbicacion = false;
 
   const $ = id => document.getElementById(id);
 
@@ -32,9 +33,7 @@
       .toLocaleLowerCase('es');
   }
   async function api(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error((await res.text()) || `Error ${res.status}`);
-    return res.json();
+    return ReporteCarga.solicitarJson(url);
   }
 
   function dibujar(id, config) {
@@ -109,15 +108,18 @@
   }
 
   // Ejecuta una sección y aísla sus errores; el spinner global lo controla actualizar().
-  async function correr(id, mi, fn) {
+  async function correr(id, mi, fn, estado) {
     try {
       const r = await fn();
       if (mi !== version) return;
       $(id).innerHTML = r.html;
       if (r.dibujar) r.dibujar();
     } catch (e) {
-      if (mi === version)
-        $(id).innerHTML = `<div class="alert alert-danger mb-0">No se pudo cargar esta sección: ${esc(e.message)}</div>`;
+      if (mi === version) {
+        if (estado) estado.fallos++;
+        $(id).innerHTML =
+          '<div class="alert alert-warning mb-0">No se pudo cargar esta sección en este momento.</div>';
+      }
     }
   }
 
@@ -283,6 +285,7 @@
          <p class="text-muted mb-0">Cargando pertinencia, geografía y fuga de talento...</p>
        </div>` +
       '<div id="uSecciones" class="d-none">' +
+      '<div id="uAvisoError"></div>' +
       '<div id="uKpis" class="row g-3 mb-4"></div>' +
       ['uDonde', 'uSalario', 'uCargoPert', 'uCruceSalario', 'uCruceCargo', 'uCruceUbic']
         .map(id => `<div id="${id}" class="mb-4"></div>`).join('') +
@@ -295,54 +298,87 @@
     esqueleto();
     const qs = qsFiltros(filtrosActuales());
     const P = CFG.p;
+    const estado = { fallos: 0, total: 7 };
     try {
       await Promise.all([
-        correr('uKpis', mi, () => kpis(qs)),
-        correr('uDonde', mi, () => dondeTrabajan(qs)),
+        correr('uKpis', mi, () => kpis(qs), estado),
+        correr('uDonde', mi, () => dondeTrabajan(qs), estado),
         correr('uSalario', mi, () => promedio(
           'Salario promedio mensual por departamento',
           'Estimación con el punto medio de cada rango salarial (el rango «Más de Bs. 10.000» se toma como Bs. 12.000).',
-          P.salario, P.departamento, qs, { prefijo: 'Bs. ', decimales: 0, columna: 'Departamento', canvas: 'gSalario' })),
+          P.salario, P.departamento, qs, { prefijo: 'Bs. ', decimales: 0, columna: 'Departamento', canvas: 'gSalario' }), estado),
         correr('uCargoPert', mi, () => promedio(
           'Pertinencia promedio por cargo',
           'Escala de 1 (totalmente en desacuerdo) a 4 (totalmente de acuerdo) sobre si las labores son pertinentes a la formación.',
-          P.pertinencia, P.cargo, qs, { decimales: 2, columna: 'Cargo', canvas: 'gCargoPert' })),
+          P.pertinencia, P.cargo, qs, { decimales: 2, columna: 'Cargo', canvas: 'gCargoPert' }), estado),
         correr('uCruceSalario', mi, () => cruce(
           'Ubicación × nivel salarial',
           '¿El nivel salarial depende de dónde trabaja el titulado?',
-          P.departamento, P.salario, 'Departamento', 'Rango salarial', qs, 'gCruceSalario')),
+          P.departamento, P.salario, 'Departamento', 'Rango salarial', qs, 'gCruceSalario'), estado),
         correr('uCruceCargo', mi, () => cruce(
           'Cargo × pertinencia de la formación',
           'Barras apiladas: cómo se distribuye la pertinencia dentro de cada cargo.',
-          P.cargo, P.pertinencia, 'Cargo', 'Pertinencia', qs, 'gCruceCargo')),
+          P.cargo, P.pertinencia, 'Cargo', 'Pertinencia', qs, 'gCruceCargo'), estado),
         correr('uCruceUbic', mi, () => cruce(
           'Ubicación × pertinencia de la formación',
           '¿La pertinencia del puesto cambia según el lugar de trabajo?',
-          P.departamento, P.pertinencia, 'Departamento', 'Pertinencia', qs, 'gCruceUbic'))
+          P.departamento, P.pertinencia, 'Departamento', 'Pertinencia', qs, 'gCruceUbic'), estado)
       ]);
     } finally {
       if (mi === version) {
         const cargador = $('uCargador');
         if (cargador) cargador.remove();
-        const secciones = $('uSecciones');
-        if (secciones) secciones.classList.remove('d-none');
-        // Los gráficos se crearon mientras las secciones estaban ocultas:
-        // se recalcula su tamaño al mostrarlas.
-        Object.values(graficos).forEach(g => {
-          try { g.resize(); } catch (e) { /* gráfico ya destruido */ }
-        });
+
+        if (estado.fallos >= estado.total) {
+          // Nada se pudo cargar (por ejemplo, Neon aún no responde):
+          // se muestra un único mensaje con reintento.
+          ReporteCarga.mostrarError($('contenedorUbicacion'), {
+            mensaje: ReporteCarga.MENSAJE_REINTENTABLE,
+            alReintentar: actualizar
+          });
+        } else {
+          const secciones = $('uSecciones');
+          if (secciones) secciones.classList.remove('d-none');
+          if (estado.fallos > 0) {
+            ReporteCarga.mostrarError($('uAvisoError'), {
+              mensaje: 'Algunas secciones no se pudieron cargar. ' +
+                'Puedes reintentar la carga completa del reporte.',
+              alReintentar: actualizar
+            });
+          }
+          // Los gráficos se crearon mientras las secciones estaban ocultas:
+          // se recalcula su tamaño al mostrarlas.
+          Object.values(graficos).forEach(g => {
+            try { g.resize(); } catch (e) { /* gráfico ya destruido */ }
+          });
+        }
       }
     }
   }
 
   window.cargarReporteUbicacion = async function () {
+    const cont = $('contenedorUbicacion');
+    if (!cont || cargandoUbicacion) return;
+
+    cargandoUbicacion = true;
     try {
-      if (!filtrosListos) { await prepararFiltros(); filtrosListos = true; }
+      if (!filtrosListos) {
+        ReporteCarga.mostrarCargando(
+          cont,
+          'Cargando datos de pertinencia, geografía y fuga de talento...',
+          'danger'
+        );
+        await prepararFiltros();
+        filtrosListos = true;
+      }
+      await actualizar();
     } catch (e) {
-      $('contenedorUbicacion').innerHTML =
-        `<div class="alert alert-danger">No se pudo cargar el reporte: ${esc(e.message)}</div>`;
-      return;
+      ReporteCarga.mostrarError(cont, {
+        error: e,
+        alReintentar: window.cargarReporteUbicacion
+      });
+    } finally {
+      cargandoUbicacion = false;
     }
-    await actualizar();
   };
 })();

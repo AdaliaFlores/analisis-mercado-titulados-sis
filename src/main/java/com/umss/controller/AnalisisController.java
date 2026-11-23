@@ -90,7 +90,6 @@ public class AnalisisController {
     }
 
     private static void responderError(Context ctx, Exception e) {
-        e.printStackTrace();
-        ctx.status(500).result("Error en el análisis: " + e.getMessage());
+        RespuestaError.responder(ctx, "el análisis estadístico", e);
     }
 }

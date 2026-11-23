@@ -46,6 +46,7 @@
     const $ = id => document.getElementById(id);
     const graficos = new Map();
     let versionCarga = 0;
+    let cargandoHu12 = false;
 
     function escapar(valor) {
         return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
@@ -63,14 +64,7 @@
     }
 
     async function consultar(url) {
-        const respuesta = await fetch(url);
-
-        if (!respuesta.ok) {
-            const detalle = await respuesta.text();
-            throw new Error(detalle || `Error HTTP ${respuesta.status}`);
-        }
-
-        return respuesta.json();
+        return ReporteCarga.solicitarJson(url);
     }
 
     function destruirGraficos() {
@@ -251,11 +245,7 @@
         const mensajeCarga = prefijo === 'demanda'
             ? 'Cargando demanda empresarial...'
             : 'Cargando percepción del empleador...';
-        contenedor.innerHTML = `
-            <div class="col-12 text-center py-5">
-                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
-                <p class="text-muted mb-0">${mensajeCarga}</p>
-            </div>`;
+        ReporteCarga.mostrarCargando(contenedor, mensajeCarga, 'info');
 
         const resultados = await Promise.all(
             preguntas.map(async pregunta => {
@@ -272,20 +262,32 @@
         // Evita dibujar resultados de una carga anterior.
         if (version !== versionCarga) return;
 
-        contenedor.innerHTML = '';
+        const fallos = resultados.filter(resultado => resultado.error).length;
 
-        let fallos = 0;
+        // Si ninguna pregunta se pudo cargar (por ejemplo, Neon aún no
+        // responde), se muestra un único mensaje amigable con reintento.
+        if (fallos === preguntas.length) {
+            const primerError = resultados.find(resultado => resultado.error);
+            ReporteCarga.mostrarError(contenedor, {
+                error: primerError ? primerError.error : null,
+                alReintentar: window.cargarReporteHu12
+            });
+            return;
+        }
+
+        contenedor.innerHTML = '';
 
         resultados.forEach(({ pregunta, datos, error }, indice) => {
             if (error) {
-                fallos++;
                 const col = document.createElement('div');
                 col.className = 'col-12 col-lg-6';
                 col.innerHTML = `
                     <div class="alert alert-danger h-100 mb-0">
                         <strong>Pregunta ${pregunta.id}:</strong>
                         no se pudo cargar la información.
-                        <div class="small mt-1">${escapar(error.message)}</div>
+                        <div class="small mt-1">
+                            Intenta nuevamente en unos segundos.
+                        </div>
                     </div>`;
                 contenedor.appendChild(col);
                 return;
@@ -297,14 +299,13 @@
         });
 
         if (fallos) {
-            const aviso = document.createElement('div');
-            aviso.className = 'col-12';
-            aviso.innerHTML = `
-                <div class="alert alert-warning mb-0">
-                    No se pudieron cargar ${fallos} pregunta(s).
-                    Comprueba la conexión con el servidor y vuelve a intentarlo.
-                </div>`;
-            contenedor.prepend(aviso);
+            contenedor.prepend(ReporteCarga.crearAviso(contenedor, {
+                tipo: 'warning',
+                titulo: 'Información incompleta',
+                mensaje: 'No se pudieron cargar ' + fallos
+                    + ' pregunta(s). Comprueba la conexión con el servidor y vuelve a intentarlo.',
+                alReintentar: window.cargarReporteHu12
+            }));
         }
     }
 
@@ -424,11 +425,7 @@
 
     async function cargaralumno(version) {
         const contenedor = $('hu12Contenidoalumno');
-        contenedor.innerHTML = `
-            <div class="w-100 text-center py-5">
-                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
-                <p class="text-muted mb-0">Cargando red de alumnos...</p>
-            </div>`;
+        ReporteCarga.mostrarCargando(contenedor, 'Cargando red de alumnos...', 'info');
 
         try {
             const datos = await consultar(API_alumno);
@@ -436,15 +433,16 @@
             mostraralumno(datos, contenedor);
         } catch (error) {
             if (version !== versionCarga) return;
-            mensaje(
-                contenedor,
-                `No se pudo cargar la información alumno: ${error.message}`,
-                'danger'
-            );
+            ReporteCarga.mostrarError(contenedor, {
+                error: error,
+                alReintentar: window.cargarReporteHu12
+            });
         }
     }
 
     window.cargarReporteHu12 = async function () {
+        if (cargandoHu12) return;
+
         const version = ++versionCarga;
         destruirGraficos();
 
@@ -456,21 +454,18 @@
             return;
         }
 
-        demanda.innerHTML = `
-            <div class="col-12 text-center py-5">
-                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
-                <p class="text-muted mb-0">Cargando demanda empresarial...</p>
-            </div>`;
-        percepcion.innerHTML = `
-            <div class="col-12 text-center py-5">
-                <div class="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
-                <p class="text-muted mb-0">Cargando percepción del empleador...</p>
-            </div>`;
+        cargandoHu12 = true;
+        ReporteCarga.mostrarCargando(demanda, 'Cargando demanda empresarial...', 'info');
+        ReporteCarga.mostrarCargando(percepcion, 'Cargando percepción del empleador...', 'info');
 
-        await Promise.all([
-            cargarGrupo(PREGUNTAS_DEMANDA, demanda, 'demanda', version),
-            cargarGrupo(PREGUNTAS_PERCEPCION, percepcion, 'percepcion', version),
-            cargaralumno(version)
-        ]);
+        try {
+            await Promise.all([
+                cargarGrupo(PREGUNTAS_DEMANDA, demanda, 'demanda', version),
+                cargarGrupo(PREGUNTAS_PERCEPCION, percepcion, 'percepcion', version),
+                cargaralumno(version)
+            ]);
+        } finally {
+            cargandoHu12 = false;
+        }
     };
 })();

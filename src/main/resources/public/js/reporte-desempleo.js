@@ -1,6 +1,8 @@
 // Reporte: Desempleo y Barreras de Inserción Laboral
 (function () {
 
+  let cargandoDesempleo = false;
+
   const COLORES = ['#dc3545', '#fd7e14', '#ffc107', '#198754', '#0d6efd', '#6f42c1', '#20c997', '#0dcaf0'];
 
   function esc(valor) {
@@ -182,20 +184,19 @@
   let cargandoDesempleo = false;
 
   window.cargarReporteDesempleo = async function () {
+    if (cargandoDesempleo) return;
+
     const cont = document.getElementById('contenedorDesempleo');
     if (!cont) return;
-    // Evita peticiones y renderizados duplicados si el usuario hace clics seguidos.
-    if (cargandoDesempleo) return;
+
     cargandoDesempleo = true;
-    cont.innerHTML = `
-      <div class="col-12 text-center py-5">
-        <div class="spinner-border text-danger mb-3" role="status" aria-hidden="true"></div>
-        <p class="text-muted mb-0">Cargando desempleo y barreras de inserción...</p>
-      </div>`;
+    ReporteCarga.mostrarCargando(
+      cont,
+      'Cargando datos de desempleo y barreras de inserción...',
+      'danger'
+    );
     try {
-      const res = await fetch('/api/reportes/desempleo');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const d = await res.json();
+      const d = await ReporteCarga.solicitarJson('/api/reportes/desempleo');
       cont.innerHTML = '';
 
       cont.insertAdjacentHTML('beforeend', `
@@ -223,7 +224,10 @@
       addDemandas(cont, d.demandas || []);
       addResumen(cont, d.resumen || []);
     } catch (e) {
-      cont.innerHTML = '<div class="col-12"><p class="text-danger">No se pudo cargar el reporte: ' + esc(e.message) + '</p></div>';
+      ReporteCarga.mostrarError(cont, {
+        error: e,
+        alReintentar: window.cargarReporteDesempleo
+      });
     } finally {
       cargandoDesempleo = false;
     }
